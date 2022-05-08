@@ -78,6 +78,7 @@ jobs:
   # https://github.com/performous/performous-docker since
   # github actions provides only Ubuntu
   Linux_Packages:
+    if: ${{ false }}
     # The upload step needs the release to be created first so it
     # can access the upload_url output. This step also needs the output from
     # the version dteremination job to name things correctly.
@@ -214,31 +215,33 @@ jobs:
 
   # Create the Flatpak
   Flatpak:
-    name: Creat the Flatpak
+    name: Create the Flatpak
     needs:
       - determine_version
       - create_release
     runs-on: ubuntu-latest
+    container:
+      image: bilelmoussaoui/flatpak-github-actions:freedesktop-21.08
+      options: --privileged
     steps:
-      - name: Install the AppImage bundler and Performous deps
-        id: fetch_deps
-        run: |
-          sudo apt install flatpak flatpak-builder
-          sudo flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-          sudo flatpak install -y --noninteractive flathub org.freedesktop.Platform//21.08 org.freedesktop.Sdk//21.08
-
       - name: Checkout Git
         id: checkout_git
         uses: actions/checkout@v3
         with:
           path: performous
 
-      - name: Build Flatpak
-        id: build_flatpak
-        run: |
-          cd performous
-          PACKAGE_VERSION=${{ needs.determine_version.outputs.complete_version }}
-          flatpak-builder build-dir org.Performous.Performous.yml
+      - uses: bilelmoussaoui/flatpak-github-actions/flatpak-builder@v4
+        with:
+          bundle: performous.flatpak
+          manifest-path: performous/org.Performous.Performous.yml
+          cache-key: flatpak-builder-${{ hashFiles('performous/org.Performous.Performous.yml') }}
+
+      #- name: Build Flatpak
+      #  id: build_flatpak
+      #  run: |
+      #    cd performous
+      #    PACKAGE_VERSION=${{ needs.determine_version.outputs.complete_version }}
+      #    flatpak-builder build-dir org.Performous.Performous.yml
           #WORK_DIR=$(pwd)
           #PACKAGE_PATH=$(ls ${WORK_DIR}/*.AppImage)
           #PACKAGE_NAME=$(echo ${PACKAGE_PATH} | sed 's/\(Performous\).*$/\1/')
@@ -285,6 +288,7 @@ jobs:
 
   # Create the AppImage
   AppImage:
+    if: ${{ false }}
     name: Create the AppImage
     needs:
       - determine_version
@@ -365,6 +369,7 @@ jobs:
 
   # Create the MacOS dmg
   MacOS_Packages:
+    if: ${{ false }}
     name: Create MacOS dmg
     needs:
       - determine_version
@@ -448,6 +453,7 @@ jobs:
 
   # Create the Windows installer
   Windows_Packages:
+    if: ${{ false }}
     name: Create Windows installer
     needs:
       - determine_version
