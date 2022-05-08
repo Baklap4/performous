@@ -1,0 +1,31 @@
+app-id: org.Performous.Performous
+runtime: org.freedesktop.Platform
+sdk: org.freedesktop.Sdk
+runtime-version: '21.08'
+command: performous
+finish-args:
+  - --socket=wayland
+  - --socket=x11
+  - --socket=pulseaudio
+  - --share=ipc
+  - --share=network # Webserver bind to localhost
+  - --device=dri # OpenGL
+  - --device=all # All for now: Webcam, Microphones, Mixers etc
+  - --filesystem=host # Access all files on host can be narrowed down into specific folders with read and write options
+cleanup: # Removes all files that are not wanted as part of the application.
+  - /include
+  - /lib/cmake
+  - /lib/pkgconfig
+  - /lib/*.la
+  - /share/cmake
+  - /share/man
+modules: # Dependencies + Main program.
+  - name: Performous
+    buildsystem: cmake-ninja
+    builddir: true
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+    sources:
+      - type: archive
+        url: https://github.com/performous/performous/archive/refs/tags/1.2.0.tar.gz
+        sha256: c88438bb3b9400a2254a99284375157534ae38befc48ba27254bc3b9e7ef50ef
