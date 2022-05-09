@@ -1,11 +1,37 @@
+include(LibFindMacros)
 include(LibFetchMacros)
 
 set(Ced_GIT_VERSION "master")
 
-libfetch_git_pkg(Ced
-	REPOSITORY ${SELF_BUILT_GIT_BASE}/compact_enc_det.git
-	#https://github.com/google/compact_enc_det.git
-	REFERENCE  ${Ced_GIT_VERSION}
-	FIND_PATH  compact_enc_det/compact_enc_det.h
-)
+if(SELF_BUILT_CED STREQUAL "ALWAYS")
+	message(STATUS "ced forced to build from source")
+	libfetch_git_pkg(Ced
+		REPOSITORY ${SELF_BUILT_GIT_BASE}/compact_enc_det.git
+		#https://github.com/google/compact_enc_det.git
+		REFERENCE  ${Ced_GIT_VERSION}
+		FIND_PATH  compact_enc_det/compact_enc_det.h
+	)
+elseif(SELF_BUILT_CED STREQUAL "NEVER")
+	find_package(PkgConfig REQUIRED)
+	pkg_check_modules(CED REQUIRED QUIET IMPORTED_TARGET GLOBAL ced>=${Ced_FIND_VERSION})
+	add_library(ced ALIAS PkgConfig::CED)
+	set(Ced_VERSION ${CED_VERSION})
+elseif(SELF_BUILT_CED STREQUAL "AUTO")
+	find_package(PkgConfig REQUIRED)
+	pkg_check_modules(CED QUIET IMPORTED_TARGET GLOBAL ced>=${Ced_FIND_VERSION})
+	if(NOT CED_FOUND)
+		message(STATUS "ced build from source because not found on system")
+		libfetch_git_pkg(Ced
+			REPOSITORY ${SELF_BUILT_GIT_BASE}/compact_enc_det.git
+			#https://github.com/google/compact_enc_det.git
+			REFERENCE  ${Ced_GIT_VERSION}
+			FIND_PATH  compact_enc_det/compact_enc_det.h
+		)
+	else()
+		add_library(aubio ALIAS PkgConfig::AUBIO)
+		set(Aubio_VERSION ${AUBIO_VERSION})
+	endif()
+else()
+	message(FATAL_ERROR "unknown SELF_BUILD_CED value \"${SELF_BUILT_CED}\". Allowed values are NEVER, AUTO and ALWAYS")
+endif()
 message(STATUS "Found Google CED ${Ced_VERSION}")
