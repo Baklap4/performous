@@ -156,6 +156,7 @@ modules: # Dependencies + Main program.
     builddir: true
     config-opts:
       - -DCMAKE_BUILD_TYPE=Release
+      - -DSELF_BUILT_CED=NEVER
     sources:
       - type: git 
         url: https://github.com/performous/performous
