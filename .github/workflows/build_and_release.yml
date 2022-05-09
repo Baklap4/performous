@@ -78,6 +78,7 @@ jobs:
   # https://github.com/performous/performous-docker since
   # github actions provides only Ubuntu
   Linux_Packages:
+    if: ${{ false }}
     # The upload step needs the release to be created first so it
     # can access the upload_url output. This step also needs the output from
     # the version dteremination job to name things correctly.
@@ -212,8 +213,87 @@ jobs:
           asset_name: ${{ env.ARTIFACT_NAME }}
           asset_content_type: application/octet-stream
 
+  # Create the Flatpak
+  Flatpak:
+    name: Create the Flatpak
+    needs:
+      - determine_version
+      - create_release
+    runs-on: ubuntu-latest
+    container:
+      image: bilelmoussaoui/flatpak-github-actions:freedesktop-21.08
+      options: --privileged
+    steps:
+      - name: Checkout Git
+        id: checkout_git
+        uses: actions/checkout@v3
+        with:
+          path: performous
+      - name: Dump Github Context
+        env:
+          GITHUB_CONTEXT: ${{ toJson(github) }}
+        run: echo "$GITHUB_CONTEXT"
+
+      - uses: bilelmoussaoui/flatpak-github-actions/flatpak-builder@v4
+        with:
+          bundle: performous.flatpak
+          manifest-path: performous/org.Performous.Performous.yml
+          cache-key: flatpak-builder-${{ hashFiles('performous/org.Performous.Performous.yml') }}
+          branch: ${{ github.event.pull_request.head.ref }}
+
+      #- name: Build Flatpak
+      #  id: build_flatpak
+      #  run: |
+      #    cd performous
+      #    PACKAGE_VERSION=${{ needs.determine_version.outputs.complete_version }}
+      #    flatpak-builder build-dir org.Performous.Performous.yml
+          #WORK_DIR=$(pwd)
+          #PACKAGE_PATH=$(ls ${WORK_DIR}/*.AppImage)
+          #PACKAGE_NAME=$(echo ${PACKAGE_PATH} | sed 's/\(Performous\).*$/\1/')
+          #PACKAGE_SUFFIX=".AppImage"
+          #NEW_PACKAGE_NAME="${PACKAGE_NAME}-${PACKAGE_VERSION}${PACKAGE_SUFFIX}"
+          #MASTER_NEW_PACKAGE_NAME="${PACKAGE_NAME}-latest${PACKAGE_SUFFIX}"
+          #cp ${PACKAGE_PATH} ${MASTER_NEW_PACKAGE_NAME}
+          #mv ${PACKAGE_PATH} ${NEW_PACKAGE_NAME}
+          #ARTIFACT_NAME=$( echo ${NEW_PACKAGE_NAME} | rev | cut -d '/' -f1 | rev)
+          #MASTER_ARTIFACT_NAME=$( echo ${MASTER_NEW_PACKAGE_NAME} | rev | cut -d '/' -f1 | rev)
+          #echo "ARTIFACT_PATH=${NEW_PACKAGE_NAME}" >> ${GITHUB_ENV}
+          #echo "ARTIFACT_NAME=${ARTIFACT_NAME}" >> ${GITHUB_ENV}
+          #echo "MASTER_ARTIFACT_PATH=${MASTER_NEW_PACKAGE_NAME}" >> ${GITHUB_ENV}
+          #echo "MASTER_ARTIFACT_NAME=${MASTER_ARTIFACT_NAME}" >> ${GITHUB_ENV}
+
+      # Upload artifacts during pull-requests
+      #- name: Upload artifact
+      #  uses: actions/upload-artifact@v3
+      #  if: ${{ github.event_name == 'pull_request' }}
+      #  with:
+      #    name: ${{ env.ARTIFACT_NAME }}
+      #    path: ${{ env.ARTIFACT_PATH }}
+      #
+      ## Upload artifacts on master
+      #- name: Upload artifact with unified name
+      #  if: ${{ github.ref == 'refs/heads/master' }}
+      #  uses: actions/upload-artifact@v3
+      #  with:
+      #    name: ${{ env.MASTER_ARTIFACT_NAME }}
+      #    path: ${{ env.MASTER_ARTIFACT_PATH }}
+      #
+      ## Upload artifacts to releases only during Release events
+      #- name: Upload artifacts to tagged release
+      #  id: upload_assets
+      #  if: ${{ github.event_name != 'pull_request' && github.ref_type == 'tag' }}
+      #  uses: actions/upload-release-asset@v1
+      #  env:
+      #    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #  with:
+      #    upload_url: ${{ needs.create_release.outputs.upload_url }}
+      #    asset_path: ${{ env.ARTIFACT_PATH }}
+      #    asset_name: ${{ env.ARTIFACT_NAME }}
+      #    asset_content_type: application/octet-stream
+
   # Create the AppImage
   AppImage:
+    if: ${{ false }}
     name: Create the AppImage
     needs:
       - determine_version
@@ -294,6 +374,7 @@ jobs:
 
   # Create the MacOS dmg
   MacOS_Packages:
+    if: ${{ false }}
     name: Create MacOS dmg
     needs:
       - determine_version
@@ -377,6 +458,7 @@ jobs:
 
   # Create the Windows installer
   Windows_Packages:
+    if: ${{ false }}
     name: Create Windows installer
     needs:
       - determine_version

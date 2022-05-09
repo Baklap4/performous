@@ -1,0 +1,162 @@
+app-id: org.Performous.Performous
+runtime: org.freedesktop.Platform
+sdk: org.freedesktop.Sdk
+runtime-version: '21.08'
+command: performous
+finish-args:
+  - --socket=wayland
+  - --socket=x11
+  - --socket=pulseaudio
+  - --share=ipc
+  - --share=network # Webserver bind to localhost
+  - --device=dri # OpenGL
+  - --device=all # All for now: Webcam, Microphones, Mixers etc
+  - --filesystem=host # Access all files on host can be narrowed down into specific folders with read and write options
+cleanup: # Removes all files that are not wanted as part of the application.
+  - /include
+  - /lib/cmake
+  - /lib/pkgconfig
+  - /lib/*.la
+  - /share/cmake
+  - /share/man
+modules: # Dependencies + Main program.
+#              libssl-dev libcpprest-dev 
+  - name: openblas
+    no-autogen: true
+    make-args:
+      - DYNAMIC_ARCH=1
+      - FC=gfortran
+      - NO_CBLAS=1
+      - NO_LAPACKE=1
+      - TARGET=GENERIC
+      - USE_OPENMP=0    ## OpenMP off by default, this hack skips 'test_fork' which crashes on i386
+    make-install-args:
+      - PREFIX=/app
+    sources:
+      - type: archive
+        url: https://github.com/xianyi/OpenBLAS/archive/v0.3.20.tar.gz
+        sha256: 8495c9affc536253648e942908e88e097f2ec7753ede55aca52e5dead3029e3c
+        x-checker-data:
+          type: anitya
+          project-id: 2540
+          url-template: https://github.com/xianyi/OpenBLAS/archive/v$version.tar.gz
+
+  - name: fftw3
+    config-opts:
+      - --enable-thread
+      - --enable-shared
+      - --disable-static
+      - --enable-float
+    sources:
+      - type: archive
+        url: http://www.fftw.org/fftw-3.3.8.tar.gz
+        sha256: 6113262f6e92c5bd474f2875fa1b01054c4ad5040f6b0da7c03c98821d9ae303
+
+  - name: aubio
+    no-autogen: true
+    build-system: cmake
+    sources:
+      - type: git
+        url: https://github.com/performous/aubio
+
+  - name: boost
+    buildsystem: simple
+    build-commands:
+      - ./bootstrap.sh --prefix=/app --with-libraries=headers,program_options,iostreams,system,locale,timer # Timer is needed for sigc++
+      - ./b2 install variant=release link=shared runtime-link=shared cxxflags="$CXXFLAGS" linkflags="$LDFLAGS" -j $FLATPAK_BUILDER_N_JOBS
+    sources:
+      - type: archive
+        url: https://boostorg.jfrog.io/artifactory/main/release/1.79.0/source/boost_1_79_0.tar.bz2
+        sha256: 475d589d51a7f8b3ba2ba4eda022b170e562ca3b760ee922c146b6c65856ef39
+  - name: mm-common # needed for sigc++
+    buildsystem: meson
+    sources: 
+      - type: archive
+        url: http://ftp.gnome.org/pub/GNOME/sources/mm-common/1.0/mm-common-1.0.2.tar.xz
+        sha256: a2a99f3fa943cf662f189163ed39a2cfc19a428d906dd4f92b387d3659d1641d
+  
+  - name: SigC++
+    buildsystem: meson
+    sources:
+      - type: archive
+        url: https://github.com/libsigcplusplus/libsigcplusplus/releases/download/3.2.0/libsigc++-3.2.0.tar.xz
+        sha256: 8cdcb986e3f0a7c5b4474aa3c833d676e62469509f4899110ddf118f04082651
+
+  - name: glibmm
+    buildsystem: meson
+    sources:
+      - type: archive
+        url: https://download.gnome.org/sources/glibmm/2.68/glibmm-2.68.2.tar.xz
+        sha256: 91e0a8618f7b82db4aaf2648932ea2bcfe626ad030068c18fa2d106fd838d8ad
+
+  - name: LibXML++
+    buildsystem: meson
+    sources:
+      - type: archive
+        url: https://github.com/libxmlplusplus/libxmlplusplus/releases/download/5.0.1/libxml++-5.0.1.tar.xz
+        sha256: 15c38307a964fa6199f4da6683a599eb7e63cc89198545b36349b87cf9aa0098
+
+  - name: portaudio
+    buildsystem: cmake-ninja
+    sources:
+      - type: archive
+        url: https://github.com/PortAudio/portaudio/archive/refs/tags/v19.7.0.tar.gz
+        sha256: 5af29ba58bbdbb7bbcefaaecc77ec8fc413f0db6f4c4e286c40c3e1b83174fa0
+
+  - name: portmidi
+    buildsystem: cmake-ninja
+    sources:
+      - type: archive
+        url: https://github.com/PortMidi/portmidi/archive/refs/tags/v2.0.3.tar.gz
+        sha256: 934f80e1b09762664d995e7ab5a9932033bc70639e8ceabead817183a54c60d0
+
+  - name: glm
+    buildsystem: cmake-ninja
+    no-make-install: true
+    post-install:
+      - install -d ${FLATPAK_DEST}/include
+      - cp -R glm ${FLATPAK_DEST}/include
+    sources:
+      - type: archive
+        url: https://github.com/g-truc/glm/archive/refs/tags/0.9.9.8.tar.gz
+        sha256: 7d508ab72cb5d43227a3711420f06ff99b0a0cb63ee2f93631b162bfe1fe9592
+
+  - name: Nlohmann-JSON
+    buildsystem: simple
+    build-commands:
+      - cp -r include/nlohmann ${CPLUS_INCLUDE_PATH}
+    sources:
+      - type: archive
+        url: https://github.com/nlohmann/json/releases/download/v3.10.5/include.zip
+        sha256: b94997df68856753b72f0d7a3703b7d484d4745c567f3584ef97c96c25a5798e
+        strip-components: 0
+
+  - name: Compact Encoding Detection
+    buildsystem: cmake-ninja
+    no-make-install: true
+    post-install:
+      - install -d ${FLATPAK_DEST}/lib
+      - cp -R lib/* ${FLATPAK_DEST}/lib
+    sources:
+      - type: git
+        url: https://github.com/performous/compact_enc_det
+
+  #- name: OpenCV
+  #  buildsystem: cmake-ninja
+  #  builddir: true
+  #  #config-opts:
+  #  #   - -DBUILD_LIST=core,videoio
+  #  sources:
+  #    - type: archive
+  #      url: https://github.com/opencv/opencv/archive/4.5.5.tar.gz
+  #      sha256: a1cfdcf6619387ca9e232687504da996aaa9f7b5689986b8331ec02cb61d28ad 
+
+  - name: Performous
+    buildsystem: cmake
+    builddir: true
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DSELF_BUILT_CED=NEVER
+    sources:
+      - type: git 
+        url: https://github.com/performous/performous
