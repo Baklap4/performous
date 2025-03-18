@@ -121,7 +121,7 @@ void ScreenPlayers::draw() {
 	double length = m_audio.getLength();
 	double time = clamp(m_audio.getPosition() - config["audio/video_delay"].f(), 0.0, length);
 	if (m_songbg.get()) m_songbg->draw(window);
-	if (m_video.get()) m_video->render(window, time);
+	if (m_video.get()) m_video->render(window, time, 1.0f);
 	theme->bg.draw(window);
 	std::string music, songbg, video;
 	double videoGap = 0.0;

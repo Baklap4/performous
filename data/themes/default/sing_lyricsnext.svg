@@ -57,6 +57,15 @@
        inkscape:vp_z="800 : 300 : 1"
        inkscape:persp3d-origin="400 : 200 : 1"
        id="perspective2397" />
+	  <!-- Drop shadow filter with color and opacity -->
+	  <filter id="drop-shadow" x="-50%" y="-50%" width="200%" height="200%">
+		  <feGaussianBlur in="SourceAlpha" stdDeviation="5" result="blur"/>
+		  <feOffset in="blur" dx="4" dy="4" result="offsetBlur"/>
+		  <feFlood flood-color="rgb(0,0,0)" flood-opacity="1" result="color"/>  <!-- Blue color with 50% opacity -->
+		  <feComposite in2="offsetBlur" operator="in"/>
+		  <feComposite in2="SourceAlpha" operator="in" />
+		  <feComposite in2="color" operator="in" />
+	  </filter>
   </defs>
   <g
      id="layer17">
@@ -65,7 +74,8 @@
        y="575.25488"
        style="font-size:30px;font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;text-align:center;line-height:125%;writing-mode:lr-tb;text-anchor:middle;fill:#d3d7cf;stroke:#000000ff;stroke-width:1.5;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:1.5;stroke-dasharray:none;stroke-dashoffset:0;display:inline;font-family:Goblin"
        id="text6611"
-       xml:space="preserve"><tspan
+       xml:space="preserve"
+	   filter="url(#drop-shadow)"><tspan
          x="400"
          y="575.25488"
          id="tspan6613"

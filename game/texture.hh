@@ -223,7 +223,7 @@ public:
 	~Texture();
 	bool empty() const { return m_width * m_height == 0.f; } ///< Test if the loading has failed
 	/// draws texture
-	void draw(Window&) const;
+	void draw(Window&, float = 1.0f) const;
 	void draw(Window&, glmath::mat3 const&) const;
 	using OpenGLTexture<GL_TEXTURE_2D>::draw;
 	/// loads texture into buffer
