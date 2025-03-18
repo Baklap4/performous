@@ -535,13 +535,14 @@ void ScreenSing::draw() {
 		if (!m_background || m_background->empty()) m_background = std::make_unique<Texture>(m_backgrounds.getRandom());
 		ar = m_background->dimensions.ar();
 		if (ar > arMax || (m_video && ar > arMin)) fillBG(window);  // Fill white background to avoid black borders
-		m_background->draw(window);
+		m_background->draw(window, 0.6f);
 		// Webcam
 		if (m_cam && config["graphic/webcam"].b())
 			m_cam->render();
 		// Video
 		if (m_video) {
-			m_video->render(window, time);
+			m_background.reset();
+			m_video->render(window, time, 0.6f);
 			float tmp = m_video->dimensions().ar();
 			if (tmp > 0.0f) ar = tmp;
 		}

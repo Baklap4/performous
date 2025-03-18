@@ -6,6 +6,7 @@
 #include "svg.hh"
 #include "game.hh"
 #include "util.hh"
+#include "graphic/color_trans.hh"
 
 #include <atomic>
 #include <cctype>
@@ -206,11 +207,13 @@ void Texture::load(Bitmap const& bitmap, bool isText) {
 	if (!isText) glGenerateMipmap(type());
 }
 
-void Texture::draw(Window& window) const {
+void Texture::draw(Window& window, float opacity) const {
 	if (empty()) return;
 	// FIXME: This gets image alpha handling right but our ColorMatrix system always assumes premultiplied alpha
 	// (will produce incorrect results for fade effects)
 	glBlendFunc(m_premultiplied ? GL_ONE : GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	float alpha = static_cast<float>(clamp(opacity));
+	ColorTrans c(window, Color::alpha(alpha));
 	draw(window, dimensions, TexCoords(tex.x1, tex.y1, tex.x2, tex.y2));
 }
 
