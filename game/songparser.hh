@@ -99,7 +99,13 @@ private:
 	bool getline (std::string& line) { ++m_linenum; return (bool) std::getline (m_ss, line); }
 	Song::BPM getBPM(Song const& s, double ts) const;
 	void addBPM(double ts, float bpm);
-	double tsTime(double ts) const;	 ///< Convert a timestamp (beats) into time (seconds)
+	double tsTime(double ts) const;  ///< Convert a timestamp (beats) into time (seconds)
+	bool assCheck(std::string const& data) const;
+	void assParse();
+	void assParseMetadata();
+	bool checkOverlap(const VocalTrack& track, const double& startTimeStr, const double& endTimeStr);
+	double timeToSeconds(std::string const& timeStr);
+	int timeToBeat(double seconds);
 	bool txtCheck(std::string const& data) const;
 	void txtParseHeader();
 	void txtParse();

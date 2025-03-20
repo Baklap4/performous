@@ -85,6 +85,8 @@ SongParser::SongParser(Song& s) : m_song(s) {
 				s.type = Song::Type::TXT;
 			} else if (iniCheck(ss)) {
 				s.type = Song::Type::INI;
+			} else if (assCheck(ss)) {
+				s.type = Song::Type::ASS;
 			} else {
 				throw SongParserException(s, "Does not look like a song file (wrong header)", 1, true);
 			}
@@ -101,6 +103,7 @@ SongParser::SongParser(Song& s) : m_song(s) {
 			else if (s.type == Song::Type::INI) midParse();  // INI doesn't contain notes, parse those from MIDI
 			else if (s.type == Song::Type::XML) xmlParse();
 			else if (s.type == Song::Type::SM) smParse();
+			else if (s.type == Song::Type::ASS) assParse();
 			finalize();  // Do some adjusting to the notes
 			s.loadStatus = Song::LoadStatus::FULL;
 			return;
@@ -111,7 +114,8 @@ SongParser::SongParser(Song& s) : m_song(s) {
 		else if (s.type == Song::Type::XML) xmlParseHeader();
 		else if (s.type == Song::Type::SM) {
 			smParseHeader(); s.dropNotes();  // Hack: drop notes here (load again when playing the song)
-		}
+		} 
+		else if (s.type == Song::Type::ASS) assParseMetadata();
 
 		guessFiles();
 		if (!m_song.midifilename.empty()) { 
