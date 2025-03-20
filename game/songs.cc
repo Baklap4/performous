@@ -276,7 +276,7 @@ void Songs::CacheSonglist() {
 
 void Songs::reload_internal(fs::path const& parent, Cache cache) {
 	try {
-		std::regex expression(R"((\.txt|^song\.ini|^notes\.xml|\.sm)$)", std::regex_constants::icase);
+		std::regex expression(R"((\.txt|^song\.ini|^notes\.xml|\.sm|\.ass)$)", std::regex_constants::icase);
 		if (fs::is_empty(parent)) {
 			std::clog << "songs/notice: Directory " << parent << " is empty. Skipping directory. " << '\n';
 			return;
