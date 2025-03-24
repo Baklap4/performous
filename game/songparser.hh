@@ -66,6 +66,7 @@ namespace SongParserUtil {
 	void assign(bool& var, std::string const& str);
 	/// Erase last character if it matches
 	void eraseLast(std::string& s, char ch = ' ');
+	static std::unordered_map<std::string, fs::path> assTagsFileIndex;
 }
 
 /// Parse a song file; this object is only used while parsing and is discarded once done.
@@ -103,6 +104,7 @@ private:
 	bool assCheck(std::string const& data) const;
 	void assParse();
 	void assParseMetadata();
+	void buildFileIndex(const fs::path& directory);
 	bool checkOverlap(const VocalTrack& track, const double& startTimeStr, const double& endTimeStr);
 	double timeToSeconds(std::string const& timeStr);
 	int timeToBeat(double seconds);
