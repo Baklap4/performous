@@ -63,6 +63,12 @@ void SongParser::assParseMetadata() {
                 title = titleEntry->get<std::string>();
             }
         }
+        else if (titles != data->end() && titles->is_object() && jsonData["data"]["titles"].contains("eng")) {
+			title = jsonData["data"]["titles"]["eng"].get<std::string>();
+        }
+        else {
+            title = jsonData["data"]["titles"].front().get<std::string>();
+        }
     }
 
     std::string artist;
@@ -83,10 +89,9 @@ void SongParser::assParseMetadata() {
             tagFile.close();
 
             if (data != jsonData.end() && data->is_object()) {
-                const auto& titles = data->find("titles");
                 const auto& langKey = data->find("titles_default_language");// ->get<std::string>();
 
-                if (titles != data->end() && tagData.contains("tag") && tagData["tag"].is_object() &&
+                if (tagData.contains("tag") && tagData["tag"].is_object() &&
                     tagData["tag"].contains("i18n") && tagData["tag"].is_object())
                 {
                     if (langKey != data->end() && langKey->is_string())
@@ -96,15 +101,18 @@ void SongParser::assParseMetadata() {
                             artist = tagData["tag"]["i18n"][langKeyStr].get<std::string>();
                         }
                     }
-                    else if (!tagData["tag"]["i18n"].empty()) 
+                    if (artist.empty() && !tagData["tag"]["name"].empty()) {
+                        artist = tagData["tag"]["name"].get<std::string>();
+                    }
+                    if (artist.empty() && !tagData["tag"]["i18n"].empty())
                     {
-						artist = tagData["tag"]["i18n"].front().get<std::string>();
+                        artist = tagData["tag"]["i18n"].front().get<std::string>();
                     }
                 }
             }
         }
     }
-    else if (jsonData.contains("data") && jsonData["data"].is_object() &&
+    if (artist.empty() && jsonData.contains("data") && jsonData["data"].is_object() &&
         jsonData["data"].contains("tags") && jsonData["data"]["tags"].is_object() &&
         jsonData["data"]["tags"].contains("singers") && jsonData["data"]["tags"]["singers"].is_array())
     {
@@ -121,10 +129,9 @@ void SongParser::assParseMetadata() {
             tagFile.close();
 
             if (data != jsonData.end() && data->is_object()) {
-                const auto& titles = data->find("titles");
                 const auto& langKey = data->find("titles_default_language");
 
-                if (titles != data->end() && tagData.contains("tag") && tagData["tag"].is_object() &&
+                if (tagData.contains("tag") && tagData["tag"].is_object() &&
                     tagData["tag"].contains("i18n") && tagData["tag"].is_object())
                 {
                     if (langKey != data->end() && langKey->is_string())
@@ -134,8 +141,125 @@ void SongParser::assParseMetadata() {
                             artist = tagData["tag"]["i18n"][langKeyStr].get<std::string>();
                         }
                     }
-                    else if (!tagData["tag"]["i18n"].empty()) {
+                    if (artist.empty() && !tagData["tag"]["name"].empty()) {
+                        artist = tagData["tag"]["name"].get<std::string>();
+                    }
+                    if (artist.empty() && !tagData["tag"]["i18n"].empty())
+                    {
                         artist = tagData["tag"]["i18n"].front().get<std::string>();
+                    }
+                }
+            }
+        }
+    }
+    if (artist.empty() && jsonData.contains("data") && jsonData["data"].is_object() &&
+        jsonData["data"].contains("tags") && jsonData["data"]["tags"].is_object() &&
+        jsonData["data"]["tags"].contains("franchises") && jsonData["data"]["tags"]["franchises"].is_array())
+    {
+        for (const auto& franchiseId : jsonData["data"]["tags"]["franchises"])
+        {
+            auto franchiseIdstr = franchiseId.get<std::string>();
+            auto franchiseIdStrFirstChunk = franchiseIdstr.substr(0, 8);
+            auto tagFilePath(findFileWithGuidSubstring(tagsPath, franchiseIdStrFirstChunk));
+
+            nlohmann::json tagData;
+            std::ifstream tagFile(tagFilePath);
+            if (!tagFile.is_open()) throw std::runtime_error("Can't open file.");
+            tagFile >> tagData;
+            tagFile.close();
+
+            if (data != jsonData.end() && data->is_object()) {
+                const auto& langKey = data->find("titles_default_language");
+
+                if (tagData.contains("tag") && tagData["tag"].is_object() &&
+                    tagData["tag"].contains("i18n") && tagData["tag"].is_object())
+                {
+                    if (langKey != data->end() && langKey->is_string())
+                    {
+                        auto langKeyStr = langKey->get<std::string>();
+                        if (tagData["tag"]["i18n"].contains(langKeyStr)) {
+                            artist = tagData["tag"]["i18n"][langKeyStr].get<std::string>();
+                        }
+                    }
+                    if (artist.empty() && !tagData["tag"]["name"].empty()) {
+                        artist = tagData["tag"]["name"].get<std::string>();
+                    }
+                    if (artist.empty() && !tagData["tag"]["i18n"].empty())
+                    {
+                        artist = tagData["tag"]["i18n"].front().get<std::string>();
+                    }
+                }
+            }
+        }
+    }
+    if (artist.empty() && jsonData.contains("data") && jsonData["data"].is_object() &&
+        jsonData["data"].contains("tags") && jsonData["data"]["tags"].is_object() &&
+        jsonData["data"]["tags"].contains("series") && jsonData["data"]["tags"]["series"].is_array())
+        {
+            for (const auto& serieId : jsonData["data"]["tags"]["series"])
+            {
+                auto serieIdstr = serieId.get<std::string>();
+                auto serieIdStrFirstChunk = serieIdstr.substr(0, 8);
+                auto tagFilePath(findFileWithGuidSubstring(tagsPath, serieIdStrFirstChunk));
+
+                nlohmann::json tagData;
+                std::ifstream tagFile(tagFilePath);
+                if (!tagFile.is_open()) throw std::runtime_error("Can't open file.");
+                tagFile >> tagData;
+                tagFile.close();
+
+                if (data != jsonData.end() && data->is_object()) {
+                    const auto& langKey = data->find("titles_default_language");
+
+                    if (tagData.contains("tag") && tagData["tag"].is_object() &&
+                        tagData["tag"].contains("i18n") && tagData["tag"].is_object())
+                    {
+                        if (langKey != data->end() && langKey->is_string())
+                        {
+                            auto langKeyStr = langKey->get<std::string>();
+                            if (tagData["tag"]["i18n"].contains(langKeyStr)) {
+                                artist = tagData["tag"]["i18n"][langKeyStr].get<std::string>();
+                            }
+                        }
+                        if (artist.empty() && !tagData["tag"]["name"].empty()) {
+                            artist = tagData["tag"]["name"].get<std::string>();
+                        }
+                        if (artist.empty() && !tagData["tag"]["i18n"].empty())
+                        {
+                            artist = tagData["tag"]["i18n"].front().get<std::string>();
+                        }
+                    }
+                }
+            }
+        }
+    if (artist.empty()) {
+        artist = "N/A";
+    }
+
+    std::string language;
+    if (jsonData.contains("data") && jsonData["data"].is_object() &&
+        jsonData["data"].contains("tags") && jsonData["data"]["tags"].is_object() &&
+        jsonData["data"]["tags"].contains("langs") && jsonData["data"]["tags"]["langs"].is_array())
+    {
+        for (const auto& singerId : jsonData["data"]["tags"]["langs"])
+        {
+            auto singerIdstr = singerId.get<std::string>();
+            auto singerIdStrFirstChunk = singerIdstr.substr(0, 8);
+            auto tagFilePath(findFileWithGuidSubstring(tagsPath, singerIdStrFirstChunk));
+
+            nlohmann::json tagData;
+            std::ifstream tagFile(tagFilePath);
+            if (!tagFile.is_open()) throw std::runtime_error("Can't open file.");
+            tagFile >> tagData;
+            tagFile.close();
+
+            if (data != jsonData.end() && data->is_object()) {
+
+                if (tagData.contains("tag") && tagData["tag"].is_object() &&
+                    tagData["tag"].contains("i18n") && tagData["tag"].is_object())
+                {
+                    if (tagData["tag"]["i18n"].contains("eng")) {
+                        language = tagData["tag"]["i18n"]["eng"].get<std::string>();
                     }
                 }
             }
@@ -149,9 +273,18 @@ void SongParser::assParseMetadata() {
     m_song.title = title;
     m_song.music[TrackName::BGMUSIC] = mediaPath;
     m_song.video = mediaPath;
+    m_song.language = language;
 
-    if (m_song.title.empty() || m_song.artist.empty() || m_song.music[TrackName::BGMUSIC].empty()) {
-        throw std::runtime_error("Required header fields missing");
+    if (m_song.title.empty()) {
+        throw std::runtime_error("Required header title missing");
+    }
+    if (m_song.artist.empty())
+    {
+        throw std::runtime_error("Required header artist fields missing");
+    }
+    if (m_song.music[TrackName::BGMUSIC].empty())
+    {
+        throw std::runtime_error("Required header audio missing");
     }
 
     if (m_bpm != 0.0f) addBPM(0, m_bpm);
@@ -170,7 +303,6 @@ void SongParser::assParse() {
     m_song.insertVocalTrack(TrackName::VOCAL_LEAD, VocalTrack(TrackName::VOCAL_LEAD)); 
 
     auto basePath = m_song.path;
-    m_song.language = "Japanese";
     addBPM(0, 1500);
     bool inEvents = false;
     std::vector<std::string> detectedStyles;
@@ -195,7 +327,7 @@ void SongParser::assParse() {
                 std::string text = match[8].str();
 
                 if (styleMap.find(style) == styleMap.end() && detectedStyles.size() < 2) {
-                    std::string trackName = detectedStyles.empty() ? TrackName::VOCAL_LEAD : TrackName::VOCAL_BACKING;
+                    std::string trackName = detectedStyles.empty() ? TrackName::VOCAL_LEAD : SongParserUtil::DUET_P2;
                     m_song.insertVocalTrack(trackName, VocalTrack(style));
                     styleMap[style] = trackName;
                     detectedStyles.push_back(style);
@@ -214,9 +346,9 @@ void SongParser::assParse() {
 
                     // Try inserting the style into VOCAL_BACKING if no overlap
                     else if (!addedToBacking) {
-                        auto& backingTrack = m_song.getVocalTrack(TrackName::VOCAL_BACKING);
+                        auto& backingTrack = m_song.getVocalTrack(SongParserUtil::DUET_P2);
                         if (!checkOverlap(backingTrack, timeToSeconds(startTimeStr)*100, timeToSeconds(endTimeStr)*100)) {
-                            styleMap[style] = TrackName::VOCAL_BACKING;
+                            styleMap[style] = SongParserUtil::DUET_P2;
                             addedToBacking = true;
                         }
                     }
@@ -232,7 +364,7 @@ void SongParser::assParse() {
                 auto& track = m_song.getVocalTrack(trackName);
                 if (addedToBacking) 
                 {
-					track = m_song.getVocalTrack(TrackName::VOCAL_BACKING);
+					track = m_song.getVocalTrack(SongParserUtil::DUET_P2);
                 }
                 else if (addedToLead) 
                 {
