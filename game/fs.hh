@@ -114,4 +114,4 @@ struct FsPathHash {
 	}
 };
 
-fs::path findFileWithGuidSubstring(const fs::path& directory, const std::string& guidPrefix);
+fs::path findFileWithGuidSubstring(const fs::path& directory, std::string_view guidPrefix);

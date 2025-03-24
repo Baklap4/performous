@@ -106,7 +106,10 @@ SongParser::SongParser(Song& s) : m_song(s) {
 			else if (s.type == Song::Type::ASS) assParseMetadata();
 		}
 
-		guessFiles();
+		if (s.type != Song::Type::ASS)
+		{
+			guessFiles();
+		}
 
 		if (headerAlreadyParsed) {
 			if (!s.m_bpms.empty()) {

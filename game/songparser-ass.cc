@@ -18,6 +18,22 @@ struct Syllable {
     std::string syllable;
 };
 
+void SongParser::buildFileIndex(const fs::path& directory) {
+    std::unordered_map<std::string, fs::path> fileIndex;
+
+    for (const auto& entry : fs::directory_iterator(directory, fs::directory_options::skip_permission_denied)) {
+        if (entry.is_regular_file()) {
+            std::string filename = entry.path().filename().string();
+            size_t firstDot = filename.find('.');
+            if (firstDot == std::string::npos || firstDot + 9 > filename.size()) continue;
+            std::string guidPrefix = std::string(filename.substr(firstDot + 1, 8));
+            fileIndex[guidPrefix] = entry.path();
+        }
+    }
+
+    assTagsFileIndex = fileIndex;
+}
+
 void SongParser::assParseMetadata() {
     // Determine starting path (lyrics folder which contains the ass files.)
     auto filePath = m_song.filename;
@@ -35,6 +51,10 @@ void SongParser::assParseMetadata() {
     auto tagsPath = parentPath / "tags";
     auto languageTagsPath = parentPath / "language-tags";
 
+    if (assTagsFileIndex.empty())
+    {
+        buildFileIndex(tagsPath);
+    }
     // Read metadata file.
     nlohmann::json jsonData;
     std::ifstream file(metadataPath);
@@ -80,7 +100,12 @@ void SongParser::assParseMetadata() {
         {
             auto singerGroupIdstr = singerGroupId.get<std::string>();
             auto singerGroupIdStrFirstChunk = singerGroupIdstr.substr(0, 8);
-            auto tagFilePath(findFileWithGuidSubstring(tagsPath, singerGroupIdStrFirstChunk));
+
+            auto it = assTagsFileIndex.find(singerGroupIdStrFirstChunk);
+            if (it == assTagsFileIndex.end()) {
+                continue;
+            }
+            fs::path tagFilePath = it->second;
 
             nlohmann::json tagData;
             std::ifstream tagFile(tagFilePath);
@@ -120,7 +145,11 @@ void SongParser::assParseMetadata() {
         {
 			auto singerIdstr = singerId.get<std::string>();
             auto singerIdStrFirstChunk = singerIdstr.substr(0, 8);
-            auto tagFilePath(findFileWithGuidSubstring(tagsPath, singerIdStrFirstChunk));
+            auto it = assTagsFileIndex.find(singerIdStrFirstChunk);
+            if (it == assTagsFileIndex.end()) {
+                continue;
+            }
+            fs::path tagFilePath = it->second;
 
             nlohmann::json tagData;
             std::ifstream tagFile(tagFilePath);
@@ -160,7 +189,11 @@ void SongParser::assParseMetadata() {
         {
             auto franchiseIdstr = franchiseId.get<std::string>();
             auto franchiseIdStrFirstChunk = franchiseIdstr.substr(0, 8);
-            auto tagFilePath(findFileWithGuidSubstring(tagsPath, franchiseIdStrFirstChunk));
+            auto it = assTagsFileIndex.find(franchiseIdStrFirstChunk);
+            if (it == assTagsFileIndex.end()) {
+                continue;
+            }
+            fs::path tagFilePath = it->second;
 
             nlohmann::json tagData;
             std::ifstream tagFile(tagFilePath);
@@ -200,7 +233,11 @@ void SongParser::assParseMetadata() {
             {
                 auto serieIdstr = serieId.get<std::string>();
                 auto serieIdStrFirstChunk = serieIdstr.substr(0, 8);
-                auto tagFilePath(findFileWithGuidSubstring(tagsPath, serieIdStrFirstChunk));
+                auto it = assTagsFileIndex.find(serieIdStrFirstChunk);
+                if (it == assTagsFileIndex.end()) {
+                    continue;
+                }
+                fs::path tagFilePath = it->second;
 
                 nlohmann::json tagData;
                 std::ifstream tagFile(tagFilePath);
@@ -234,6 +271,7 @@ void SongParser::assParseMetadata() {
         }
     if (artist.empty()) {
         artist = "N/A";
+        std::clog << "songparse/notice: Artist not found for " << m_song.title << " Ass: " << m_song.filename << std::endl;
     }
 
     std::string language;
@@ -245,7 +283,11 @@ void SongParser::assParseMetadata() {
         {
             auto singerIdstr = singerId.get<std::string>();
             auto singerIdStrFirstChunk = singerIdstr.substr(0, 8);
-            auto tagFilePath(findFileWithGuidSubstring(tagsPath, singerIdStrFirstChunk));
+            auto it = assTagsFileIndex.find(singerIdStrFirstChunk);
+            if (it == assTagsFileIndex.end()) {
+                continue;
+            }
+            fs::path tagFilePath = it->second;
 
             nlohmann::json tagData;
             std::ifstream tagFile(tagFilePath);
