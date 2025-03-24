@@ -380,22 +380,23 @@ Paths getPathsConfig(std::string const& confOption) {
 	return ret;
 }
 
-fs::path findFileWithGuidSubstring(const fs::path& directory, const std::string& guidPrefix) {
-	if (!fs::exists(directory) || !fs::is_directory(directory)) {
+fs::path findFileWithGuidSubstring(const fs::path& directory, std::string_view guidPrefix) {
+	if (!fs::is_directory(directory)) {
 		std::cerr << "Error: Directory does not exist or is not valid.\n";
-		return fs::path(); // Return an empty path if the directory is invalid
+		return {};
 	}
 
-	// Iterate over files in the directory
-	for (const auto& entry : fs::directory_iterator(directory)) {
-		if (entry.is_regular_file()) {
-			std::string filename = entry.path().filename().string();
-			// Check if the filename contains the GUID prefix
-			if (filename.find(guidPrefix) != std::string::npos) {
-				return entry.path(); // Return the full path of the matching file
-			}
+	for (const auto& entry : fs::directory_iterator(directory, fs::directory_options::skip_permission_denied)) {
+		if (!entry.is_regular_file()) continue;
+
+		// Convert path to string (UTF-8 safe)
+		std::string filename = entry.path().filename().string();
+
+		// Check for substring match
+		if (filename.find(guidPrefix) != std::string::npos) {
+			return entry.path(); // Return immediately on first match
 		}
 	}
 
-	return fs::path(); // Return an empty path if no file is found
+	return {};
 }
