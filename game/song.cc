@@ -250,8 +250,13 @@ std::string Song::strFull() const {
 		"{}\n"
 		"{}\n"
 		"{}\n"
+		"{}\n"
+		"{}\n"
+		"{}\n"
+		"{}\n"
+		"{}\n"
 		"{}",
-		title, artist, genre, edition, path
+		title, artist, genre, edition, path, language, tags, year, providedBy, comment
 	);
 }
 
