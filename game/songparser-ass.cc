@@ -55,6 +55,12 @@ void SongParser::assParseMetadata() {
     {
         buildFileIndex(tagsPath);
     }
+
+    bool isFullSize = false;
+    bool isInstrumental = false;
+    bool isAlternative = false;
+    bool isCreditless = false;
+
     // Read metadata file.
     nlohmann::json jsonData;
     std::ifstream file(metadataPath);
@@ -88,6 +94,48 @@ void SongParser::assParseMetadata() {
         }
         else {
             title = jsonData["data"]["titles"].front().get<std::string>();
+        }
+
+
+        for (const auto& singerId : jsonData["data"]["tags"]["versions"])
+        {
+            auto singerIdstr = singerId.get<std::string>();
+            auto singerIdStrFirstChunk = singerIdstr.substr(0, 8);
+            auto it = assTagsFileIndex.find(singerIdStrFirstChunk);
+            if (it == assTagsFileIndex.end()) {
+                continue;
+            }
+            fs::path tagFilePath = it->second;
+
+            nlohmann::json tagData;
+            std::ifstream tagFile(tagFilePath);
+            if (!tagFile.is_open()) throw std::runtime_error("Can't open file.");
+            tagFile >> tagData;
+            tagFile.close();
+
+            if (data != jsonData.end() && data->is_object()) {
+
+                if (tagData.contains("tag") && tagData["tag"].is_object() && tagData["tag"].contains("name"))
+                {
+                    auto value = tagData["tag"]["name"].get<std::string>();
+                    if (value == "Full")
+                    {
+						isFullSize = true;
+                    }
+                    else if (value == "Off Vocal")
+                    {
+                        isInstrumental = true;
+                    }
+                    else if (value == "Alternative")
+                    {
+                        isAlternative = true;
+                    }
+                    else if (value == "Creditless")
+                    {
+                        isCreditless = true;
+                    }
+                }
+            }
         }
     }
 
@@ -308,14 +356,106 @@ void SongParser::assParseMetadata() {
         }
     }
 
+    std::string creator;
+    if (jsonData.contains("data") && jsonData["data"].is_object() &&
+        jsonData["data"].contains("tags") && jsonData["data"]["tags"].is_object() &&
+        jsonData["data"]["tags"].contains("authors") && jsonData["data"]["tags"]["authors"].is_array())
+    {
+        for (const auto& singerId : jsonData["data"]["tags"]["authors"])
+        {
+            auto singerIdstr = singerId.get<std::string>();
+            auto singerIdStrFirstChunk = singerIdstr.substr(0, 8);
+            auto it = assTagsFileIndex.find(singerIdStrFirstChunk);
+            if (it == assTagsFileIndex.end()) {
+                continue;
+            }
+            fs::path tagFilePath = it->second;
+
+            nlohmann::json tagData;
+            std::ifstream tagFile(tagFilePath);
+            if (!tagFile.is_open()) throw std::runtime_error("Can't open file.");
+            tagFile >> tagData;
+            tagFile.close();
+
+            if (data != jsonData.end() && data->is_object()) {
+
+                if (tagData.contains("tag") && tagData["tag"].is_object() && tagData["tag"].contains("name"))
+                {
+					creator = tagData["tag"]["name"].get<std::string>();
+                }
+            }
+        }
+    }
+
+    int year = 0;
+    if (jsonData.contains("data") && jsonData["data"].is_object() &&
+        jsonData["data"].contains("year") && jsonData["data"]["year"].is_number_integer())
+    {
+        year = jsonData["data"]["year"].get<int>();
+    }
+
+    std::string tags;
+    if (jsonData.contains("data") && jsonData["data"].is_object() &&
+        jsonData["data"].contains("tags") && jsonData["data"]["tags"].is_object() &&
+        jsonData["data"]["tags"].contains("series") && jsonData["data"]["tags"]["series"].is_array())
+    {
+        for (const auto& singerId : jsonData["data"]["tags"]["series"])
+        {
+            auto singerIdstr = singerId.get<std::string>();
+            auto singerIdStrFirstChunk = singerIdstr.substr(0, 8);
+            auto it = assTagsFileIndex.find(singerIdStrFirstChunk);
+            if (it == assTagsFileIndex.end()) {
+                continue;
+            }
+            fs::path tagFilePath = it->second;
+
+            nlohmann::json tagData;
+            std::ifstream tagFile(tagFilePath);
+            if (!tagFile.is_open()) throw std::runtime_error("Can't open file.");
+            tagFile >> tagData;
+            tagFile.close();
+
+            if (data != jsonData.end() && data->is_object()) {
+
+                if (tagData.contains("tag") && tagData["tag"].is_object() && tagData["tag"].contains("name"))
+                {
+                    tags = tagData["tag"]["name"].get<std::string>();
+                }
+            }
+        }
+    }
+
     // Dummy note to indicate there is a track;
 	// This is actually wrong since the song can be a duet... we don't know untill we process the dialogues.
     m_song.insertVocalTrack(TrackName::VOCAL_LEAD, VocalTrack(TrackName::VOCAL_LEAD));
     m_song.artist = artist;
     m_song.title = title;
+    if (isFullSize)
+    {
+		m_song.title += " (Full Size)";
+    }
+	if (isInstrumental)
+	{
+		m_song.title += " (Instrumental)";
+	}
     m_song.music[TrackName::BGMUSIC] = mediaPath;
     m_song.video = mediaPath;
     m_song.language = language;
+	m_song.creator = creator;
+	m_song.tags = tags;
+	if (isAlternative)
+	{
+		m_song.tags += ", Alternative";
+	}
+    if (isCreditless)
+    {
+        m_song.tags += ", Creditless";
+    }
+    m_song.providedBy = "https://kara.moe";
+    if (year != 0)
+    {
+        m_song.year = year;
+    }
 
     if (m_song.title.empty()) {
         throw std::runtime_error("Required header title missing");
