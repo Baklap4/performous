@@ -246,7 +246,7 @@ double Song::getPreviewStart() {
 std::string Song::str() const { return title + "  by  " + artist; }
 
 std::string Song::strFull() const {
-    return title + "\n" + artist + "\n" + genre + "\n" + edition + "\n" + path.string();
+    return title + "\n" + artist + "\n" + genre + "\n" + edition + "\n" + path.string() + "\n" + language + "\n" + tags + "\n" + std::to_string(year) + "\n" + providedBy + "\n" + comment;
 }
 
 std::vector<std::string> Song::getVocalTrackNames() const {

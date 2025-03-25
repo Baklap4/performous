@@ -451,7 +451,7 @@ void SongParser::assParseMetadata() {
     {
         m_song.tags += ", Creditless";
     }
-    m_song.providedBy = "https://kara.moe";
+    m_song.providedBy = "Kara.Moe";
     if (year != 0)
     {
         m_song.year = year;

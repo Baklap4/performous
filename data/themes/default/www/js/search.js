@@ -14,25 +14,25 @@
     The autocomplete makes use of the TypeAhead library.
 */
 $("#search-tab").click(function (){
-    $.get("api/getDataBase.json?sort=artist&order=ascending", function (data) {
-        var database = data;
-        var input = $("#search-field");
-        input.typeahead({
-            source: database,
-            autoSelect: false,
-            items: 10,
-            select: function (e) {
-                var val = this.$menu.find(".active").data("value");
-                if(val) {
-                    addSong(JSON.stringify(val));
-                    $("#search-field").val("");
-                } else {
-                    $("#search-database").click();
-                    $(".typeahead.dropdown-menu").hide();
-                }
-            }
-        });
-    });
+    //$.get("api/getDataBase.json?sort=artist&order=ascending", function (data) {
+    //    var database = data;
+    //    var input = $("#search-field");
+    //    input.typeahead({
+    //        source: database,
+    //        autoSelect: false,
+    //        items: 10,
+    //        select: function (e) {
+    //            var val = this.$menu.find(".active").data("value");
+    //            if(val) {
+    //                addSong(JSON.stringify(val));
+    //                $("#search-field").val("");
+    //            } else {
+    //                $("#search-database").click();
+    //                $(".typeahead.dropdown-menu").hide();
+    //            }
+    //        }
+    //    });
+    //});
 });
 
 /*
@@ -53,6 +53,8 @@ $("#search-database").click(function (e, callback) {
                 var songMeta = "";
                 songMeta += songObject.Language.length > 0 ? " | " + songObject.Language : "";
                 songMeta += songObject.Edition.length > 0 ? " | " + songObject.Edition : "";
+                songMeta += songObject.Tags.length > 0 ? " | " + songObject.Tags : "";
+                songMeta += songObject.Year.length > 0 ? " | " + songObject.Year : "";
                 songMeta += songObject.ProvidedBy.length > 0 ? " | " + songObject.ProvidedBy : "";
                 songMeta += songObject.Comment.length > 0 ? " | " + songObject.Comment : "";
                 var errorMeta = songObject.HasError ? "⚠️" : "";
@@ -86,6 +88,8 @@ $("#search-database").click(function (e, callback) {
                 var songMeta = "";
                 songMeta += songObject.Language.length > 0 ? " | " + songObject.Language : "";
                 songMeta += songObject.Edition.length > 0 ? " | " + songObject.Edition : "";
+                songMeta += songObject.Tags.length > 0 ? " | " + songObject.Tags : "";
+                songMeta += songObject.Year.length > 0 ? " | " + songObject.Year : "";
                 songMeta += songObject.ProvidedBy.length > 0 ? " | " + songObject.ProvidedBy : "";
                 songMeta += songObject.Comment.length > 0 ? " | " + songObject.Comment : "";
                 var errorMeta = songObject.HasError ? "⚠️" : "";
