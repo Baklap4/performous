@@ -43,7 +43,7 @@ public:
 	enum class LoadStatus { NONE = 0, HEADER = 1, FULL = 2, ERROR = -1 } loadStatus = LoadStatus::NONE;
 	/// status of song
 	enum class Status { NORMAL, INSTRUMENTAL_BREAK, FINISHED };
-	enum class Type { NONE, TXT, XML, INI, SM } type = Type::NONE;
+	enum class Type { NONE, TXT, XML, INI, SM, ASS } type = Type::NONE;
 	VocalTracks vocalTracks; ///< notes for the sing part
 	VocalTrack dummyVocal; ///< notes for the sing part
 	InstrumentTracks instrumentTracks; ///< guitar etc. notes for this song
