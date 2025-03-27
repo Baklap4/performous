@@ -1,6 +1,7 @@
 #include "requesthandler.hh"
 #include "unicode.hh"
 #include "game.hh"
+#include <regex>
 
 #include <cstdint>
 
@@ -322,6 +323,9 @@ web::json::value RequestHandler::ExtractJsonFromRequest(web::http::http_request 
 
 web::json::value RequestHandler::SongsToJsonObject() {
 	web::json::value jsonRoot = web::json::value::array();
+	std::regex pattern("\"");
+	std::ofstream myfile;
+	myfile.open("database.sql");
 	for (size_t i = 0; i < m_songs.size(); i++) {
 		web::json::value songObject = web::json::value::object();
 		songObject[utility::conversions::to_string_t("Title")] = web::json::value::string(utility::conversions::to_string_t(m_songs[i]->title));
@@ -336,7 +340,10 @@ web::json::value RequestHandler::SongsToJsonObject() {
 		songObject[utility::conversions::to_string_t("Tags")] = web::json::value(utility::conversions::to_string_t(m_songs[i]->tags));
 		songObject[utility::conversions::to_string_t("Year")] = web::json::value(utility::conversions::to_string_t(std::to_string(m_songs[i]->year)));
 		jsonRoot[i] = songObject;
+		auto sqlIndex = i + 1;
+		myfile << "INSERT INTO `Library` VALUES(" << sqlIndex << ",\"" << std::regex_replace(m_songs[i]->artist, pattern, "\\\"") << "\", \"" << std::regex_replace(m_songs[i]->title, pattern, "\\\"") << "\", \"" << std::regex_replace(m_songs[i]->language, pattern, "\\\"") << "\",\"" << std::regex_replace(m_songs[i]->edition, pattern, "\\\"") << "\",\"" << std::regex_replace(m_songs[i]->creator, pattern, "\\\"") << "\");\n";
 	}
+	myfile.close();
 
 	return jsonRoot;
 }
