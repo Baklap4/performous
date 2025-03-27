@@ -464,9 +464,10 @@ void SongParser::assParseMetadata() {
     {
         throw std::runtime_error("Required header artist fields missing");
     }
-    if (m_song.music[TrackName::BGMUSIC].empty())
+    if (m_song.music[TrackName::BGMUSIC].empty() || !fs::exists(m_song.music[TrackName::BGMUSIC]))
     {
-        throw std::runtime_error("Required header audio missing");
+        m_song.loadStatus = Song::LoadStatus::ERROR;
+        std::clog << "songparser/error: Required MP3 '" << m_song.music[TrackName::BGMUSIC].string() << "' file isn't available." << std::endl;
     }
 
     if (m_bpm != 0.0f) addBPM(0, m_bpm);
@@ -561,6 +562,8 @@ void SongParser::assParse() {
                 std::smatch kMatch;
 
                 while (std::regex_search(text, kMatch, kTagRegex)) {
+                    //std::string kValueKey = kMatch[0].str(); // use this to add missing k tags. Contains: {\fad(149,100)\k90\k24}
+
                     std::string kValue = kMatch[1].str();  // Extract numeric value after \k
                     int duration = std::stoi(kValue);  // Convert centiseconds to beats
 
@@ -570,7 +573,6 @@ void SongParser::assParse() {
                     if (nextTag == std::string::npos) nextTag = text.length();
 
                     std::string syllable = text.substr(syllableStart, nextTag - syllableStart);
-                    syllable = std::regex_replace(syllable, std::regex(R"(^\s+|\s+$)"), ""); // Trim spaces
 
                     syllables.push_back({ kValue, syllable });
 
@@ -596,20 +598,16 @@ void SongParser::assParse() {
                         continue;
                     }
 
-                    std::istringstream syllableStream(s.syllable);
-                    std::string syllable;
-                    while (syllableStream >> syllable) {
-                        Note note;
-                        note.type = Note::Type::NORMAL;
-                        note.begin = currentBeat / 100;
-                        note.end = (currentBeat + tweakedDuration)/100;
-                        note.syllable = syllable;
-                        note.note = 30;
-                        note.notePrev = note.note;
+                    Note note;
+                    note.type = Note::Type::NORMAL;
+                    note.begin = currentBeat / 100;
+                    note.end = (currentBeat + tweakedDuration) / 100;
+                    note.syllable = s.syllable;
+                    note.note = 30;
+                    note.notePrev = note.note;
 
-						track.notes.push_back(note);
-                        currentBeat += tweakedDuration;
-                    }
+                    track.notes.push_back(note);
+                    currentBeat += tweakedDuration;
                 }
                 track.endTime = currentBeat / 100;
 
