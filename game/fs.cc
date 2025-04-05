@@ -379,3 +379,24 @@ Paths getPathsConfig(std::string const& confOption) {
 	}
 	return ret;
 }
+
+fs::path findFileWithGuidSubstring(const fs::path& directory, std::string_view guidPrefix) {
+	if (!fs::is_directory(directory)) {
+		std::cerr << "Error: Directory does not exist or is not valid.\n";
+		return {};
+	}
+
+	for (const auto& entry : fs::directory_iterator(directory, fs::directory_options::skip_permission_denied)) {
+		if (!entry.is_regular_file()) continue;
+
+		// Convert path to string (UTF-8 safe)
+		std::string filename = entry.path().filename().string();
+
+		// Check for substring match
+		if (filename.find(guidPrefix) != std::string::npos) {
+			return entry.path(); // Return immediately on first match
+		}
+	}
+
+	return {};
+}
