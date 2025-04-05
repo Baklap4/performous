@@ -327,21 +327,29 @@ web::json::value RequestHandler::SongsToJsonObject() {
 	std::ofstream myfile;
 	myfile.open("database.sql");
 	for (size_t i = 0; i < m_songs.size(); i++) {
-		web::json::value songObject = web::json::value::object();
-		songObject[utility::conversions::to_string_t("Title")] = web::json::value::string(utility::conversions::to_string_t(m_songs[i]->title));
-		songObject[utility::conversions::to_string_t("Artist")] = web::json::value::string(utility::conversions::to_string_t(m_songs[i]->artist));
-		songObject[utility::conversions::to_string_t("Edition")] = web::json::value::string(utility::conversions::to_string_t(m_songs[i]->edition));
-		songObject[utility::conversions::to_string_t("Language")] = web::json::value::string(utility::conversions::to_string_t(m_songs[i]->language));
-		songObject[utility::conversions::to_string_t("Creator")] = web::json::value::string(utility::conversions::to_string_t(m_songs[i]->creator));
-		songObject[utility::conversions::to_string_t("name")] = web::json::value::string(utility::conversions::to_string_t(m_songs[i]->artist + " " + m_songs[i]->title));
-		songObject[utility::conversions::to_string_t("HasError")] = web::json::value::boolean(m_songs[i]->loadStatus == Song::LoadStatus::ERROR);
-		songObject[utility::conversions::to_string_t("ProvidedBy")] = web::json::value(utility::conversions::to_string_t(m_songs[i]->providedBy));
-		songObject[utility::conversions::to_string_t("Comment")] = web::json::value(utility::conversions::to_string_t(m_songs[i]->comment));
-		songObject[utility::conversions::to_string_t("Tags")] = web::json::value(utility::conversions::to_string_t(m_songs[i]->tags));
-		songObject[utility::conversions::to_string_t("Year")] = web::json::value(utility::conversions::to_string_t(std::to_string(m_songs[i]->year)));
-		jsonRoot[i] = songObject;
+		//web::json::value songObject = web::json::value::object();
+		//songObject[utility::conversions::to_string_t("Title")] = web::json::value::string(utility::conversions::to_string_t(m_songs[i]->title));
+		//songObject[utility::conversions::to_string_t("Artist")] = web::json::value::string(utility::conversions::to_string_t(m_songs[i]->artist));
+		//songObject[utility::conversions::to_string_t("Edition")] = web::json::value::string(utility::conversions::to_string_t(m_songs[i]->edition));
+		//songObject[utility::conversions::to_string_t("Language")] = web::json::value::string(utility::conversions::to_string_t(m_songs[i]->language));
+		//songObject[utility::conversions::to_string_t("Creator")] = web::json::value::string(utility::conversions::to_string_t(m_songs[i]->creator));
+		//songObject[utility::conversions::to_string_t("name")] = web::json::value::string(utility::conversions::to_string_t(m_songs[i]->artist + " " + m_songs[i]->title));
+		//songObject[utility::conversions::to_string_t("HasError")] = web::json::value::boolean(m_songs[i]->loadStatus == Song::LoadStatus::ERROR);
+		//songObject[utility::conversions::to_string_t("ProvidedBy")] = web::json::value(utility::conversions::to_string_t(m_songs[i]->providedBy));
+		//songObject[utility::conversions::to_string_t("Comment")] = web::json::value(utility::conversions::to_string_t(m_songs[i]->comment));
+		//songObject[utility::conversions::to_string_t("Tags")] = web::json::value(utility::conversions::to_string_t(m_songs[i]->tags));
+		//songObject[utility::conversions::to_string_t("Year")] = web::json::value(utility::conversions::to_string_t(std::to_string(m_songs[i]->year)));
+		//jsonRoot[i] = songObject;
 		auto sqlIndex = i + 1;
 		myfile << "INSERT INTO `Library` VALUES(" << sqlIndex << ",\"" << std::regex_replace(m_songs[i]->artist, pattern, "\\\"") << "\", \"" << std::regex_replace(m_songs[i]->title, pattern, "\\\"") << "\", \"" << std::regex_replace(m_songs[i]->language, pattern, "\\\"") << "\",\"" << std::regex_replace(m_songs[i]->edition, pattern, "\\\"") << "\",\"" << std::regex_replace(m_songs[i]->creator, pattern, "\\\"") << "\");\n";
+		
+		if (i % 10000 == 0) {
+			myfile.flush();
+		}
+		if (myfile.fail()) {
+			std::clog << "webserver/error: Error writing to file at iteration " << i << std::endl;
+			break;
+		}
 	}
 	myfile.close();
 
