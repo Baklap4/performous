@@ -14,8 +14,9 @@ bool SongParser::assCheck(std::string const& data) const {
 }
 
 struct Syllable {
-    std::string duration;
+    int duration;
     std::string syllable;
+    bool isBeginOfLine;
 };
 
 void SongParser::buildFileIndex(const fs::path& directory) {
@@ -557,28 +558,86 @@ void SongParser::assParse() {
                 std::vector<Syllable> syllables;
                 size_t pos = 0;
 
-                // Regex to capture valid \k karaoke timing tags inside {} blocks
-                std::regex kTagRegex(R"(\{[^}]*\\k[fko]?(\d+)[^}]*\})");
-                std::smatch kMatch;
+                std::regex overrideBlock(R"(\{([^}]*)\})");
+                std::smatch match;
 
-                while (std::regex_search(text, kMatch, kTagRegex)) {
-                    //std::string kValueKey = kMatch[0].str(); // use this to add missing k tags. Contains: {\fad(149,100)\k90\k24}
+                size_t searchPos = 0;
+                int pendingDuration = 0;
 
-                    std::string kValue = kMatch[1].str();  // Extract numeric value after \k
-                    int duration = std::stoi(kValue);  // Convert centiseconds to beats
+                auto begin = text.cbegin();
+                auto end = text.cend();
+                int count = 0;
 
-                    // Find the actual syllable text **after** the closing `}`
-                    size_t syllableStart = kMatch.position() + kMatch.length();
-                    size_t nextTag = text.find_first_of("\\{", syllableStart);
-                    if (nextTag == std::string::npos) nextTag = text.length();
+                while (std::regex_search(begin, end, match, overrideBlock)) {
+                    size_t blockStart = match.position(0) + (begin - text.cbegin());
+                    size_t blockEnd = blockStart + match.length(0);
+                    std::string blockContent = match[1].str();
 
-                    std::string syllable = text.substr(syllableStart, nextTag - syllableStart);
+                    // Find all \k tags inside the override block and sum them
+                    std::regex kTag(R"(\\k[fko]?(\d+))");
+                    auto blockBegin = blockContent.cbegin();
+                    auto blockEndIter = blockContent.cend();
+                    std::smatch kMatch;
 
-                    syllables.push_back({ kValue, syllable });
+                    while (std::regex_search(blockBegin, blockEndIter, kMatch, kTag)) {
+                        pendingDuration += std::stoi(kMatch[1].str());
+                        blockBegin = kMatch.suffix().first;
+                    }
 
-                    // Move text past this match for the next search
-                    text = text.substr(syllableStart);
+                    // Check for syllable text after this override block
+                    size_t syllableStart = blockEnd;
+                    size_t nextBrace = text.find('{', syllableStart);
+                    std::string syllable;
+
+                    if (nextBrace != std::string::npos) {
+                        syllable = text.substr(syllableStart, nextBrace - syllableStart);
+                    }
+                    else {
+                        syllable = text.substr(syllableStart);
+                    }
+
+                    auto isBeginOfLine = count == 0 && (kMatch.suffix().str().find("\\fad") != std::string::npos || kMatch.prefix().str().find("\\fad") != std::string::npos);
+                    if (isBeginOfLine)
+                    {
+                        syllables.push_back({ pendingDuration, syllable, isBeginOfLine });
+                        pendingDuration = 0;
+                    }
+                    if (!syllable.empty()) {
+                        syllables.push_back({ pendingDuration, syllable, isBeginOfLine });
+                        pendingDuration = 0;
+                    }
+                    
+                    count++;
+
+                    searchPos = blockEnd;
+                    begin = text.cbegin() + searchPos;
                 }
+
+                // OLD SITUATION WORKED GREAT EXCEPT FOR DOUBLE TIMINGS IN A SINGLE BLOCK.
+                // 
+                // Regex to capture valid \k karaoke timing tags inside {} blocks
+                //std::regex kTagRegex(R"(\{[^}]*\\k[fko]?(\d+)[^}]*\})");
+                //std::smatch kMatch;
+                //int count = 0;
+                //while (std::regex_search(text, kMatch, kTagRegex)) {
+                //    //std::string kValueKey = kMatch[0].str(); // use this to add missing k tags. Contains: {\fad(149,100)\k90\k24}
+
+                //    std::string kValue = kMatch[1].str();  // Extract numeric value after \k
+                //    int duration = kValue.empty() ? 0: std::stoi(kValue);
+
+                //    // Find the actual syllable text **after** the closing `}`
+                //    size_t syllableStart = kMatch.position() + kMatch.length();
+                //    size_t nextTag = text.find_first_of("\\{", syllableStart);
+                //    if (nextTag == std::string::npos) nextTag = text.length();
+
+                //    std::string syllable = text.substr(syllableStart, nextTag - syllableStart);
+                //    auto isBeginOfLine = count == 0 && kMatch[0].str().find("\\fad") != std::string::npos;
+                //    syllables.push_back({ duration, syllable, isBeginOfLine});
+                //    count++;
+
+                //    // Move text past this match for the next search
+                //    text = text.substr(syllableStart);
+                //}
 
                 auto beatsPerSecond = 100;
 				auto currentBeat = timeToSeconds(startTimeStr) * beatsPerSecond;
@@ -590,9 +649,15 @@ void SongParser::assParse() {
 
                 // Process syllables and generate notes
                 for (const auto& s : syllables) {
-                    int convertedDuration = (std::stoi(s.duration) / 100.0 * beatsPerSecond); // Convert centiseconds to beats
-                    int tweakedDuration = convertedDuration > 1 ? convertedDuration - 1 : convertedDuration;
+                    int convertedDuration = (s.duration / 100.0 * beatsPerSecond); // Convert centiseconds to beats
 
+                    int tweakedDuration = convertedDuration > 1 ? convertedDuration - 1 : convertedDuration;
+                    if (s.isBeginOfLine)
+                    {
+                        track.beginTime += currentBeat / 100;
+                        currentBeat += tweakedDuration;
+                        continue;
+                    }
                     if (s.syllable.empty()) {
                         currentBeat += tweakedDuration;
                         continue;
