@@ -597,6 +597,15 @@ void SongParser::assParse() {
                     }
 
                     auto isBeginOfLine = count == 0 && (kMatch.suffix().str().find("\\fad") != std::string::npos || kMatch.prefix().str().find("\\fad") != std::string::npos);
+                    
+                    // Sometimes songs have \N in their actual text -> https://kara.moe/kara/popipo/6c41d3c8-176c-4bf5-9778-0eb0fd37f4d7
+                    // This is used to display each syllable on a new line to the side of the screen
+                    std::string to_remove = "\\N";
+                    size_t pos;
+                    while ((pos = syllable.find(to_remove)) != std::string::npos) {
+                        syllable.erase(pos, to_remove.length());
+                    }
+
                     if (isBeginOfLine)
                     {
                         syllables.push_back({ pendingDuration, syllable, isBeginOfLine });
