@@ -25,6 +25,8 @@ $("#refresh-playlist").click(function () {
                 var songMeta = "";
                 songMeta += songObject.Language.length > 0 ? " | " + songObject.Language : "";
                 songMeta += songObject.Edition.length > 0 ? " | " + songObject.Edition : "";
+                songMeta += songObject.Tags.length > 0 ? " | " + songObject.Tags : "";
+                songMeta += songObject.Year.length > 0 ? " | " + songObject.Year : "";
                 songMeta += songObject.ProvidedBy.length > 0 ? " | " + songObject.ProvidedBy : "";
                 songMeta += songObject.Comment.length > 0 ? " | " + songObject.Comment : "";
                 var position = String(iterator + 1).padStart(2, '0') + ".";
