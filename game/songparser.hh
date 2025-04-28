@@ -66,6 +66,7 @@ namespace SongParserUtil {
 	void assign(bool& var, std::string const& str);
 	/// Erase last character if it matches
 	void eraseLast(std::string& s, char ch = ' ');
+	static std::unordered_map<std::string, fs::path> assTagsFileIndex;
 }
 
 /// Parse a song file; this object is only used while parsing and is discarded once done.
@@ -99,7 +100,14 @@ private:
 	bool getline (std::string& line) { ++m_linenum; return (bool) std::getline (m_ss, line); }
 	Song::BPM getBPM(Song const& s, double ts) const;
 	void addBPM(double ts, float bpm);
-	double tsTime(double ts) const;	 ///< Convert a timestamp (beats) into time (seconds)
+	double tsTime(double ts) const;  ///< Convert a timestamp (beats) into time (seconds)
+	bool assCheck(std::string const& data) const;
+	void assParse();
+	void assParseMetadata();
+	void buildFileIndex(const fs::path& directory);
+	bool checkOverlap(const VocalTrack& track, const double& startTimeStr, const double& endTimeStr);
+	double timeToSeconds(std::string const& timeStr);
+	int timeToBeat(double seconds);
 	bool txtCheck(std::string const& data) const;
 	void txtParseHeader();
 	void txtParse();

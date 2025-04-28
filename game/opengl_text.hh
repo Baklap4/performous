@@ -49,6 +49,12 @@ struct TextStyle {
 	std::string fontalign; ///< alignment
 	std::string	stroke_linejoin; ///< stroke line-join type
 	std::string	stroke_linecap; ///< stroke line-join type
+
+	// New attributes for shadow effect
+	Color shadow_col = Color(0.f, 0.f, 0.f, 0.f); ///< shadow color (default transparent)
+	float shadow_offset_x = 10.f; ///< horizontal offset of shadow
+	float shadow_offset_y = 10.f; ///< vertical offset of shadow
+	float shadow_blur = 3.f; ///< blur radius for shadow (optional)
 };
 
 /// this class will enable to create a texture from a themed text structure

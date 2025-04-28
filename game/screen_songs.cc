@@ -284,7 +284,7 @@ void ScreenSongs::drawMultimedia() {
 				m_songbg->draw(window, m_songbg->dimensions, TexCoords(static_cast<float>(x), 0.0f, static_cast<float>(x + 5.0), 5.0f));
 			}
 		}
-		if (m_video.get()) m_video->render(window, time);
+		if (m_video.get()) m_video->render(window, time, 1.0f);
 	}
 	if (!m_jukebox) {
 		m_songbg_ground->draw(window);

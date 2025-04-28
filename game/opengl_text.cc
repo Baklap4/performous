@@ -70,23 +70,26 @@ void OpenGLText::draw(Window& window, Dimensions &_dim, TexCoords &_tex) {
 }
 
 namespace {
-	void parseTheme(fs::path const& themeFile, TextStyle &_theme, float &_width, float &_height, float &_x, float &_y, SvgTxtTheme::Align& _align) {
+	void parseTheme(fs::path const& themeFile, TextStyle& _theme, float& _width, float& _height, float& _x, float& _y, SvgTxtTheme::Align& _align) {
 		xmlpp::Node::PrefixNsMap nsmap;
 		nsmap["svg"] = "http://www.w3.org/2000/svg";
 		xmlpp::DomParser dom(themeFile.string());
+
 		// Parse width attribute
-		auto n = dom.get_document()->get_root_node()->find("/svg:svg/@width",nsmap);
-		if (n.empty()) throw std::runtime_error("Unable to find text theme info width in "+themeFile.string());
+		auto n = dom.get_document()->get_root_node()->find("/svg:svg/@width", nsmap);
+		if (n.empty()) throw std::runtime_error("Unable to find text theme info width in " + themeFile.string());
 		xmlpp::Attribute& width = dynamic_cast<xmlpp::Attribute&>(*n[0]);
 		_width = std::stof(width.get_value());
+
 		// Parse height attribute
-		n = dom.get_document()->get_root_node()->find("/svg:svg/@height",nsmap);
-		if (n.empty()) throw std::runtime_error("Unable to find text theme info height in "+themeFile.string());
+		n = dom.get_document()->get_root_node()->find("/svg:svg/@height", nsmap);
+		if (n.empty()) throw std::runtime_error("Unable to find text theme info height in " + themeFile.string());
 		xmlpp::Attribute& height = dynamic_cast<xmlpp::Attribute&>(*n[0]);
 		_height = std::stof(height.get_value());
+
 		// Parse text style attribute (CSS rules)
-		n = dom.get_document()->get_root_node()->find("/svg:svg//svg:text/@style",nsmap);
-		if (n.empty()) throw std::runtime_error("Unable to find text theme info style in "+themeFile.string());
+		n = dom.get_document()->get_root_node()->find("/svg:svg//svg:text/@style", nsmap);
+		if (n.empty()) throw std::runtime_error("Unable to find text theme info style in " + themeFile.string());
 		xmlpp::Attribute& style = dynamic_cast<xmlpp::Attribute&>(*n[0]);
 		std::istringstream iss(style.get_value());
 		std::string token;
@@ -119,13 +122,41 @@ namespace {
 				else if (value == "end") _align = SvgTxtTheme::Align::RIGHT;
 			}
 		}
-		// Parse x and y attributes
-		n = dom.get_document()->get_root_node()->find("/svg:svg//svg:text/@x",nsmap);
-		if (n.empty()) throw std::runtime_error("Unable to find text theme info x in "+themeFile.string());
+
+		// Check for custom shadow color (data-drop-shadow or filter="url(#drop-shadow)")
+		n = dom.get_document()->get_root_node()->find("/svg:svg//svg:text/@filter", nsmap);
+		if (!n.empty()) {
+			xmlpp::Attribute& filter = dynamic_cast<xmlpp::Attribute&>(*n[0]);
+			if (filter.get_value() == "url(#drop-shadow)") {
+				// Find <feFlood> element to extract shadow color and opacity
+				auto filter_node = dom.get_document()->get_root_node()->find("/svg:svg//svg:defs/svg:filter[@id='drop-shadow']/svg:feFlood", nsmap);
+				if (!filter_node.empty()) {
+					xmlpp::Element& feFlood = dynamic_cast<xmlpp::Element&>(*filter_node[0]);
+					// Extract the flood color and opacity
+					std::string color_value = feFlood.get_attribute_value("flood-color");
+					float opacity = std::stof(feFlood.get_attribute_value("flood-opacity"));
+					// Assuming the color is in RGB format like "rgb(0,0,255)"
+					std::sscanf(color_value.c_str(), "rgb(%f,%f,%f)", &_theme.shadow_col.r, &_theme.shadow_col.g, &_theme.shadow_col.b);
+					_theme.shadow_col.a = opacity;  // Set the opacity
+				}
+			}
+		}
+
+		// Alternatively, check for a custom data attribute like `data-drop-shadow`
+		n = dom.get_document()->get_root_node()->find("/svg:svg//svg:text/@data-drop-shadow", nsmap);
+		if (!n.empty()) {
+			// If data-drop-shadow is present, set shadow color
+			_theme.shadow_col = Color(0.f, 0.f, 0.f, 0.5f); // Custom shadow color (adjustable)
+		}
+
+		// Parse x and y attributes for position
+		n = dom.get_document()->get_root_node()->find("/svg:svg//svg:text/@x", nsmap);
+		if (n.empty()) throw std::runtime_error("Unable to find text theme info x in " + themeFile.string());
 		xmlpp::Attribute& x = dynamic_cast<xmlpp::Attribute&>(*n[0]);
 		_x = std::stof(x.get_value());
-		n = dom.get_document()->get_root_node()->find("/svg:svg//svg:text/@y",nsmap);
-		if (n.empty()) throw std::runtime_error("Unable to find text theme info y in "+themeFile.string());
+
+		n = dom.get_document()->get_root_node()->find("/svg:svg//svg:text/@y", nsmap);
+		if (n.empty()) throw std::runtime_error("Unable to find text theme info y in " + themeFile.string());
 		xmlpp::Attribute& y = dynamic_cast<xmlpp::Attribute&>(*n[0]);
 		_y = std::stof(y.get_value());
 	}

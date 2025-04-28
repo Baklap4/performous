@@ -106,10 +106,11 @@ void Video::prepare(double time) {
 	}
 }
 
-void Video::render(Window& window, double time) {
+void Video::render(Window& window, double time, float opacity) {
 	time += m_videoGap;
 	double tdist = std::abs(m_textureTime - time);
-	m_alpha.setTarget(tdist < 0.4 ? 1.2f : -0.5f);
+	m_alpha.setTarget(opacity);
+	//m_alpha.setTarget(tdist < 0.4 ? 1.2f : -0.5f);
 	float alpha = static_cast<float>(clamp(m_alpha.get()));
 	if (alpha == 0.0f) return;
 	ColorTrans c(window, Color::alpha(alpha));

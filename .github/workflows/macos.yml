@@ -28,9 +28,9 @@ jobs:
     env:
       MACOS_DEPS: >-
         aubio
-        boost@1.85
+        boost
         cairo
-        cmake
+        performous/pinned_cmake3/cmake@3.31.7
         cpprestsdk
         dylibbundler
         ffmpeg@7
@@ -67,26 +67,68 @@ jobs:
         with:
           NGROK_AUTH_TOKEN: ${{ secrets.NGROK_SSH_TOKEN }}
           SSH_PASS: ${{ secrets.NGROK_SSH_PASS }}
+
+      - name: "Update Brew"
+        id: update_brew
+        run: |
+          brew update
+
       # brew fetch runs downloads in parallel, which is faster
       # than letting install do it
-      - name: Fetch Dependencies
-        id: fetch_deps
-        run: |
-          brew fetch --deps $MACOS_DEPS
 
-      - name: Install Dependencies
-        id: install_deps
+#      - name: Fetch Dependencies
+#        id: fetch_deps
+#        run: |
+#          brew fetch --deps $MACOS_DEPS
+
+      - name: Install cmake3
         run: |
-           brew unlink python
-           brew install $MACOS_DEPS 2>&1
-           brew unlink boost@1.87
-           brew link --force boost@1.85
+            # uninstall version 4 of cmake
+            brew uninstall cmake
+            brew tap performous/pinned_cmake3
+
+      - name: Install dependencies with homebrew.
+        uses: Lord-Kamina/brew-install@main
+        with:
+          packages: ${{ env.MACOS_DEPS }}
+
+#      - name: Install Dependencies
+#        id: install_deps
+#        run: |
+#           brew unlink python && brew link --overwrite python
+#           brew install $MACOS_DEPS 2>&1
+#           #brew unlink boost@1.87
+#           #brew link --force boost@1.85
+#
+#           # uninstall version 4 of cmake
+#           brew uninstall cmake
+#
+#           # we need to create a tap of the core formulae in order for this to work
+#           # this will auto-enable developer mode (we'll turn it off later)
+#           brew tap --force homebrew/core 
+#
+#           # create a new, local tap to work in
+#           # by default, this creates a Git repos for the tap
+#           # add --no-git if you don't want a repos to be created
+#           brew tap-new --no-git performous/pinned_cmake
+#
+#            # copy the formula for cmake 3 to the local tap
+#            brew extract cmake --version 3.31.6 performous/pinned_cmake
+#
+#            # install the formula (this will build locally)
+#            brew install performous/pinned_cmake/cmake@3.31.6
+#
+#            # cleanup the stuff we don't need anymore
+#            brew untap homebrew/core
+#            brew developer off
 
       - name: Build package
         id: build_package
         run: |
           cd performous/osx-utils
           chmod +x ./macos-bundler.py
+          python3 -m venv ./bundler-venv
+          source ./bundler-venv/bin/activate
           pip3 install -r ./macos-bundler-requirements.txt
           python3 ./macos-bundler.py --flat-output --package-version="${{ inputs.package_complete_version }}" --enable-webserver=on --enable-midi=on --enable-webcam=on --build-tests=on --target=12.0
           PACKAGE_PATH=$(ls "${{ github.workspace }}/performous/osx-utils/out/Performous-${{ inputs.package_complete_version }}.dmg")
