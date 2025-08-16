@@ -501,14 +501,14 @@ void SongParser::assParse() {
             if (line.empty() || line[0] == ';') continue;  // Ignore empty lines or comments
 
             // Parsing the dialogue line in [Events]
-            std::regex dialoguePattern(R"(^Dialogue:.*,([0-9:.]+),([0-9:.]+),([^,]+),,([^,]+),([^,]+),([^,]+),([^,]+),(.+)$)");
+            std::regex dialoguePattern(R"(^Dialogue:\s*\d+,([0-9:.]+),([0-9:.]+),([^,]+),([^,]*),([^,]+),([^,]+),([^,]+),([^,]*),(.+)$)");
             std::smatch match;
 
             if (std::regex_match(line, match, dialoguePattern)) {
                 std::string startTimeStr = match[1].str();
                 std::string endTimeStr = match[2].str();
                 std::string style = match[3].str();
-                std::string text = match[8].str();
+                std::string text = match[9].str();
 
                 if (styleMap.find(style) == styleMap.end() && detectedStyles.size() < 2) {
                     std::string trackName = detectedStyles.empty() ? TrackName::VOCAL_LEAD : SongParserUtil::DUET_P2;
