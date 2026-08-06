@@ -200,7 +200,7 @@ void SpdLogger::initializeSinks(spdlog::level::level_enum const& consoleLevel) {
 
 	stdout_sink->set_level(consoleLevel); // Set console level before opening file to prevent trace from the file rotation.
 
-	auto file_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(filename, 1024 * 1024 * 3, 5, true, handlers);
+	auto file_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(filename, 1024 * 1024 * 300, 5, true, handlers);
 
 	m_profilerSink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(profilerLogFilename, true, handlers);
 
