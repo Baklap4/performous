@@ -165,9 +165,9 @@ bool Music::operator()(float* begin, float* end) {
 	    // The full mix already contains the instrumental + vocals and causes
 	    // phase cancellation / hollow audio when combined with the stems.
 		if (m_preview &&
-			kv.first == "background" &&
-			tracks.find("Instrumental") != tracks.end() &&
-			tracks.find("Vocals") != tracks.end())
+			kv.first == TrackName::BGMUSIC &&
+			tracks.find(TrackName::INSTRUMENTAL) != tracks.end() &&
+			tracks.find(TrackName::VOCAL_LEAD) != tracks.end())
 		{
 			continue;
 		}
