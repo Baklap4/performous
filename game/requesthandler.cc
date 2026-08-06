@@ -301,6 +301,7 @@ void RequestHandler::Post(web::http::http_request request)
 			songObject[utility::conversions::to_string_t("Comment")] = web::json::value(utility::conversions::to_string_t(m_songs[i]->comment));
 			songObject[utility::conversions::to_string_t("Tags")] = web::json::value(utility::conversions::to_string_t(m_songs[i]->tags));
 			songObject[utility::conversions::to_string_t("Year")] = web::json::value(utility::conversions::to_string_t(std::to_string(m_songs[i]->year)));
+			songObject[utility::conversions::to_string_t("SupportsInstrumental")] = web::json::value::boolean(m_songs[i]->supportsInstrumental());
 			jsonRoot[i] = songObject;
 		}
 		request.reply(web::http::status_codes::OK, jsonRoot);

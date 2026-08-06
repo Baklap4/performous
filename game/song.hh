@@ -92,6 +92,7 @@ public:
 	using Beats = std::vector<double>;
 	Beats beats; ///< related to instrument and dance
 	bool hasBRE = false; ///< is there a Big Rock Ending? (used for drums only)
+	bool supportsInstrumental() { return music.find(TrackName::INSTRUMENTAL) != music.end() && music.find(TrackName::VOCAL_LEAD) != music.end(); };
 	std::string b0rked; ///< Is something broken? (so that user can be notified)
 	struct SongSection {
 		std::string name;
