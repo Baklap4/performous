@@ -160,7 +160,18 @@ bool Music::operator()(float* begin, float* end) {
 	m_clock.timeSync(durationOf(m_pos), durationOf(samples)); // Keep the clock synced
 	bool eof = true;
 	Buffer mixbuf(static_cast<size_t>(samples));
-	for (auto& kv: tracks) {
+	for (auto& kv: tracks) { 
+		// If we have a full mix plus separate stems, don't mix them together.
+	    // The full mix already contains the instrumental + vocals and causes
+	    // phase cancellation / hollow audio when combined with the stems.
+		if (m_preview &&
+			kv.first == "background" &&
+			tracks.find("Instrumental") != tracks.end() &&
+			tracks.find("Vocals") != tracks.end())
+		{
+			continue;
+		}
+
 		Track& t = *kv.second;
 // #if 0 // FIXME: Include this code bit once there is a sane pitch shifting algorithm
 // //            if (it->first == "guitar") std::cout << t.pitchFactor << std::endl;
