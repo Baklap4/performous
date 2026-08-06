@@ -386,7 +386,7 @@ std::shared_ptr<Song> RequestHandler::GetSongFromJSON(web::json::value jsonDoc) 
 			m_songs[i]->creator == utility::conversions::to_utf8string(jsonDoc[utility::conversions::to_string_t("Creator")].as_string()) &&
 			m_songs[i]->providedBy == utility::conversions::to_utf8string(jsonDoc[utility::conversions::to_string_t("ProvidedBy")].as_string()) &&
 			m_songs[i]->tags == utility::conversions::to_utf8string(jsonDoc[utility::conversions::to_string_t("Tags")].as_string()) &&
-			std::to_string(m_songs[i]->year) == utility::conversions::to_utf8string(jsonDoc[utility::conversions::to_string_t("Year")].as_string())
+			std::to_string(m_songs[i]->year) == utility::conversions::to_utf8string(jsonDoc[utility::conversions::to_string_t("Year")].as_string()) &&
 			m_songs[i]->comment == utility::conversions::to_utf8string(jsonDoc[utility::conversions::to_string_t("Comment")].as_string())) {
 				SpdLogger::info(LogSystem::WEBSERVER, "Found requested song, {} - {}", m_songs[i]->artist, m_songs[i]->title);
 				return m_songs[i];

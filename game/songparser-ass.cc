@@ -467,7 +467,7 @@ void SongParser::assParseMetadata() {
     }
     if (m_song.music[TrackName::BGMUSIC].empty() || !fs::exists(m_song.music[TrackName::BGMUSIC]))
     {
-        m_song.loadStatus = Song::LoadStatus::ERROR;
+        m_song.loadStatus = Song::LoadStatus::PARSERERROR;
         std::clog << "songparser/error: Required MP3 '" << m_song.music[TrackName::BGMUSIC].string() << "' file isn't available." << std::endl;
     }
 
