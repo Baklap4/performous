@@ -66,7 +66,7 @@ SongParser::SongParser(Song& s) : m_song(s) {
 		}
 		m_ss << f.rdbuf();
 		size_t size = m_ss.str().length();
-		if ((size < 10) || (size > 100000)) {
+		if ((size < 10) || (size > 10000000)) { // ass files can be quite big.
 			throw SongParserException(s, "Does not look like a song file (wrong size)");
 		}
 		std::string ss = UnicodeUtil::convertToUTF8(m_ss.str(), s.filename.string());
