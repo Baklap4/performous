@@ -166,7 +166,9 @@ public:
 	void setAlign(Align align) { m_align = align; }
 
 private:
-	std::vector<std::unique_ptr<OpenGLText>> m_opengl_text;
+	std::vector<OpenGLText*> m_opengl_text;
+	std::unordered_map<std::string, std::unique_ptr<OpenGLText>> m_text_cache;
+
 	Align m_align;
 	float m_x;
 	float m_y;
@@ -175,7 +177,6 @@ private:
 	float m_factor;
 	float m_texture_width;
 	float m_texture_height;
-	std::string m_cache_text;
 	TextStyle m_textstyle;
 	TextStyle m_textstyle_highlight;
 };

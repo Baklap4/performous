@@ -213,14 +213,20 @@ void SvgTxtTheme::draw(Window& window, std::vector<TZoomText>& _text, bool lyric
 	for (auto& zt: _text) {
 		tmp += zt.string;
 	}
+	m_opengl_text.clear();
 
-	if (m_opengl_text.size() != _text.size() || m_cache_text != tmp) {
-		m_cache_text = tmp;
-		m_opengl_text.clear();
-		auto renderer = TextRenderer();
-		for (const auto& zt: _text) {
-			m_opengl_text.emplace_back(std::make_unique<OpenGLText>(renderer.render(zt.string, m_textstyle, m_factor)));
+	static TextRenderer renderer;
+
+	for (const auto& zt : _text) {
+		auto it = m_text_cache.find(zt.string);
+
+		if (it == m_text_cache.end()) {
+			auto text = std::make_unique<OpenGLText>(renderer.render(zt.string, m_textstyle, m_factor));
+
+			it = m_text_cache.emplace(zt.string, std::move(text)).first;
 		}
+
+		m_opengl_text.push_back(it->second.get());
 	}
 	float text_x = 0.0f;
 	float text_y = 0.0f;
