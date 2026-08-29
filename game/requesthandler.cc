@@ -1,6 +1,7 @@
 #include "requesthandler.hh"
 #include "unicode.hh"
 #include "game.hh"
+#include <regex>
 
 #include <cstdint>
 
@@ -27,10 +28,21 @@ void RequestHandler::Error(pplx::task<void>& t) {
 }
 
 void RequestHandler::HandleFile(web::http::http_request request, std::string filePath) {
+	std::string fileToSend;
+	std::string clientIp = utility::conversions::to_utf8string(request.remote_address());
 	auto path = filePath != "" ? utility::conversions::to_utf8string(utility::conversions::to_string_t(filePath)) : utility::conversions::to_utf8string(request.relative_uri().path());
-	auto fileName = path.substr(path.find_last_of("/\\") + 1);
+	auto const fileName = fs::path(path).filename().string();
 
-	std::string fileToSend = findFile(fileName).string();
+	try {
+		fileToSend = findFile(fileName).string();
+	}
+	catch (std::runtime_error const& e) {
+		SpdLogger::error(LogSystem::WEBSERVER, std::string("HandleFile() File Not Found. Client {}. {}"), clientIp, e.what());
+		auto const errorMsg = std::string("INTERNAL ERROR, MISSING FILE: ") + e.what();
+		request.reply(web::http::status_codes::NotFound, utility::conversions::to_string_t(errorMsg));
+		return;
+	}
+
 
 	concurrency::streams::fstream::open_istream(utility::conversions::to_string_t(fileToSend), std::ios::in).then([=](concurrency::streams::istream is) {
 		std::string content_type = "";
@@ -43,14 +55,10 @@ void RequestHandler::HandleFile(web::http::http_request request, std::string fil
 		else if (path.find(".css") != std::string::npos) {
 			content_type = "text/css";
 		}
-		else if (path.find(".png") != std::string::npos) {
-			content_type = "image/png";
-		}
-		else if (path.find(".gif") != std::string::npos) {
-			content_type = "image/gif";
-		}
-		else if (path.find(".ico") != std::string::npos) {
-			content_type = "image/x-icon";
+		else
+		{
+			// This will identify most common image types or use "application/octet-stream"
+			content_type = getImageMimeType(path);
 		}
 
 		request.reply(web::http::status_codes::OK, is, utility::conversions::to_string_t(content_type)).then([](pplx::task<void> t) {
@@ -66,10 +74,22 @@ void RequestHandler::HandleFile(web::http::http_request request, std::string fil
 			try {
 				t.get();
 			}
-			catch (...) {
-				request.reply(web::http::status_codes::InternalError, utility::conversions::to_string_t("INTERNAL ERROR "));
+			catch (const web::http::http_exception &e) {
+				SpdLogger::error(LogSystem::WEBSERVER, std::string("HandleFile() HTTP Exception. Client {}. {}"), clientIp, e.what());
+				auto const errorMsg = std::string("HTTP ERROR: ") + e.what();
+				request.reply(web::http::status_codes::InternalError, utility::conversions::to_string_t(errorMsg));
 			}
-			});
+			catch (const std::exception &e)
+			{
+				SpdLogger::error(LogSystem::WEBSERVER, std::string("HandleFile() Std. Exception. Client {}. {}"), clientIp, e.what());
+				auto const errorMsg = std::string("INTERNAL ERROR: ") + e.what();
+				request.reply(web::http::status_codes::InternalError, utility::conversions::to_string_t(errorMsg));
+			}
+			catch (...) {
+				SpdLogger::error(LogSystem::WEBSERVER, "HandleFile() Unknown Exception. Client {}.", clientIp);
+				request.reply(web::http::status_codes::InternalError, utility::conversions::to_string_t("INTERNAL ERROR: Unknown Exception"));
+			}
+		});
 }
 
 void RequestHandler::Get(web::http::http_request request)
@@ -80,7 +100,7 @@ void RequestHandler::Get(web::http::http_request request)
 	if (query != "") {
 		uri += utility::conversions::to_string_t("?") + request.relative_uri().query();
 	}
-	std::clog << "requesthandler/debug: path is: " << utility::conversions::to_utf8string(uri) << std::endl;
+	SpdLogger::debug(LogSystem::WEBSERVER, "RequestHandler GET request, path={}", utility::conversions::to_utf8string(uri));
 	auto path = utility::conversions::to_utf8string(request.relative_uri().path());
 	if (path == "/") {
 		HandleFile(request, findFile("index.html").string());
@@ -150,9 +170,11 @@ void RequestHandler::Get(web::http::http_request request)
 			songObject[utility::conversions::to_string_t("Language")] = web::json::value::string(utility::conversions::to_string_t(song->language));
 			songObject[utility::conversions::to_string_t("Creator")] = web::json::value::string(utility::conversions::to_string_t(song->creator));
 			songObject[utility::conversions::to_string_t("Duration")] = web::json::value(song->getDurationSeconds());
-			songObject[utility::conversions::to_string_t("HasError")] = web::json::value::boolean(song->loadStatus == Song::LoadStatus::ERROR);
+			songObject[utility::conversions::to_string_t("HasError")] = web::json::value::boolean(song->loadStatus == Song::LoadStatus::PARSERERROR);
 			songObject[utility::conversions::to_string_t("ProvidedBy")] = web::json::value(utility::conversions::to_string_t(song->providedBy));
 			songObject[utility::conversions::to_string_t("Comment")] = web::json::value(utility::conversions::to_string_t(song->comment));
+			songObject[utility::conversions::to_string_t("Tags")] = web::json::value(utility::conversions::to_string_t(song->tags));
+			songObject[utility::conversions::to_string_t("Year")] = web::json::value(utility::conversions::to_string_t(std::to_string(song->year)));
 			jsonRoot[i] = songObject;
 			i++;
 		}
@@ -176,7 +198,7 @@ void RequestHandler::Post(web::http::http_request request)
 	if (query != "") {
 		uri += utility::conversions::to_string_t("?") + request.relative_uri().query();
 	}
-	std::clog << "requesthandler/debug: path is: " << utility::conversions::to_utf8string(uri) << std::endl;
+	SpdLogger::debug(LogSystem::WEBSERVER, "RequestHandler POST request, path={}", utility::conversions::to_utf8string(uri));
 
 	auto path = utility::conversions::to_utf8string(request.relative_uri().path());
 
@@ -196,14 +218,14 @@ void RequestHandler::Post(web::http::http_request request)
 			request.reply(web::http::status_codes::NotFound, "Song \"" + artist + " - " + title + "\" was not found.");
 			return;
 		}
-		else if (songPointer->loadStatus == Song::LoadStatus::ERROR) {
+		else if (songPointer->loadStatus == Song::LoadStatus::PARSERERROR) {
 			auto artist = utility::conversions::to_utf8string(jsonPostBody[utility::conversions::to_string_t("Artist")].as_string());
 			auto title = utility::conversions::to_utf8string(jsonPostBody[utility::conversions::to_string_t("Title")].as_string());
 			request.reply(web::http::status_codes::NotFound, "Song \"" + artist + " - " + title + "\" Song load status is error. Please check what's wrong with it.");
 			return;
 		}
 		else {
-			std::clog << "requesthandler/debug: Adding " << songPointer->artist << " - " << songPointer->title << " to the playlist " << std::endl;
+			SpdLogger::debug(LogSystem::WEBSERVER, "Adding {} - {} to the playlist.", songPointer->artist, songPointer->title);
 			m_game.getCurrentPlayList().addSong(songPointer);
 			ScreenPlaylist* m_pp = dynamic_cast<ScreenPlaylist*>(m_game.getScreen("Playlist"));
 			m_pp->triggerSongListUpdate();
@@ -274,9 +296,12 @@ void RequestHandler::Post(web::http::http_request request)
 			songObject[utility::conversions::to_string_t("Edition")] = web::json::value::string(utility::conversions::to_string_t(m_songs[i]->edition));
 			songObject[utility::conversions::to_string_t("Language")] = web::json::value::string(utility::conversions::to_string_t(m_songs[i]->language));
 			songObject[utility::conversions::to_string_t("Creator")] = web::json::value::string(utility::conversions::to_string_t(m_songs[i]->creator));
-			songObject[utility::conversions::to_string_t("HasError")] = web::json::value::boolean(m_songs[i]->loadStatus == Song::LoadStatus::ERROR);
+			songObject[utility::conversions::to_string_t("HasError")] = web::json::value::boolean(m_songs[i]->loadStatus == Song::LoadStatus::PARSERERROR);
 			songObject[utility::conversions::to_string_t("ProvidedBy")] = web::json::value(utility::conversions::to_string_t(m_songs[i]->providedBy));
 			songObject[utility::conversions::to_string_t("Comment")] = web::json::value(utility::conversions::to_string_t(m_songs[i]->comment));
+			songObject[utility::conversions::to_string_t("Tags")] = web::json::value(utility::conversions::to_string_t(m_songs[i]->tags));
+			songObject[utility::conversions::to_string_t("Year")] = web::json::value(utility::conversions::to_string_t(std::to_string(m_songs[i]->year)));
+			songObject[utility::conversions::to_string_t("SupportsInstrumental")] = web::json::value::boolean(m_songs[i]->supportsInstrumental());
 			jsonRoot[i] = songObject;
 		}
 		request.reply(web::http::status_codes::OK, jsonRoot);
@@ -308,7 +333,7 @@ web::json::value RequestHandler::ExtractJsonFromRequest(web::http::http_request 
 			}
 			catch (web::json::json_exception const& e)
 			{
-				std::clog << "webserver/error: JSON exception was thrown \"" << e.what() << "\"." << std::endl;
+				SpdLogger::error(LogSystem::WEBSERVER, "CPPRest JSON ERROR. Exception={}", e.what());
 			}
 		}).wait();
 
@@ -318,19 +343,35 @@ web::json::value RequestHandler::ExtractJsonFromRequest(web::http::http_request 
 
 web::json::value RequestHandler::SongsToJsonObject() {
 	web::json::value jsonRoot = web::json::value::array();
+	std::regex pattern("\"");
+	std::ofstream myfile;
+	myfile.open("database.sql");
 	for (size_t i = 0; i < m_songs.size(); i++) {
-		web::json::value songObject = web::json::value::object();
-		songObject[utility::conversions::to_string_t("Title")] = web::json::value::string(utility::conversions::to_string_t(m_songs[i]->title));
-		songObject[utility::conversions::to_string_t("Artist")] = web::json::value::string(utility::conversions::to_string_t(m_songs[i]->artist));
-		songObject[utility::conversions::to_string_t("Edition")] = web::json::value::string(utility::conversions::to_string_t(m_songs[i]->edition));
-		songObject[utility::conversions::to_string_t("Language")] = web::json::value::string(utility::conversions::to_string_t(m_songs[i]->language));
-		songObject[utility::conversions::to_string_t("Creator")] = web::json::value::string(utility::conversions::to_string_t(m_songs[i]->creator));
-		songObject[utility::conversions::to_string_t("name")] = web::json::value::string(utility::conversions::to_string_t(m_songs[i]->artist + " " + m_songs[i]->title));
-		songObject[utility::conversions::to_string_t("HasError")] = web::json::value::boolean(m_songs[i]->loadStatus == Song::LoadStatus::ERROR);
-		songObject[utility::conversions::to_string_t("ProvidedBy")] = web::json::value(utility::conversions::to_string_t(m_songs[i]->providedBy));
-		songObject[utility::conversions::to_string_t("Comment")] = web::json::value(utility::conversions::to_string_t(m_songs[i]->comment));
-		jsonRoot[i] = songObject;
+		//web::json::value songObject = web::json::value::object();
+		//songObject[utility::conversions::to_string_t("Title")] = web::json::value::string(utility::conversions::to_string_t(m_songs[i]->title));
+		//songObject[utility::conversions::to_string_t("Artist")] = web::json::value::string(utility::conversions::to_string_t(m_songs[i]->artist));
+		//songObject[utility::conversions::to_string_t("Edition")] = web::json::value::string(utility::conversions::to_string_t(m_songs[i]->edition));
+		//songObject[utility::conversions::to_string_t("Language")] = web::json::value::string(utility::conversions::to_string_t(m_songs[i]->language));
+		//songObject[utility::conversions::to_string_t("Creator")] = web::json::value::string(utility::conversions::to_string_t(m_songs[i]->creator));
+		//songObject[utility::conversions::to_string_t("name")] = web::json::value::string(utility::conversions::to_string_t(m_songs[i]->artist + " " + m_songs[i]->title));
+		//songObject[utility::conversions::to_string_t("HasError")] = web::json::value::boolean(m_songs[i]->loadStatus == Song::LoadStatus::ERROR);
+		//songObject[utility::conversions::to_string_t("ProvidedBy")] = web::json::value(utility::conversions::to_string_t(m_songs[i]->providedBy));
+		//songObject[utility::conversions::to_string_t("Comment")] = web::json::value(utility::conversions::to_string_t(m_songs[i]->comment));
+		//songObject[utility::conversions::to_string_t("Tags")] = web::json::value(utility::conversions::to_string_t(m_songs[i]->tags));
+		//songObject[utility::conversions::to_string_t("Year")] = web::json::value(utility::conversions::to_string_t(std::to_string(m_songs[i]->year)));
+		//jsonRoot[i] = songObject;
+		auto sqlIndex = i + 1;
+		myfile << "INSERT INTO `Library` VALUES(" << sqlIndex << ",\"" << std::regex_replace(m_songs[i]->artist, pattern, "\\\"") << "\", \"" << std::regex_replace(m_songs[i]->title, pattern, "\\\"") << "\", \"" << std::regex_replace(m_songs[i]->language, pattern, "\\\"") << "\",\"" << std::regex_replace(m_songs[i]->edition, pattern, "\\\"") << "\",\"" << std::regex_replace(m_songs[i]->creator, pattern, "\\\"") << "\");\n";
+		
+		if (i % 10000 == 0) {
+			myfile.flush();
+		}
+		if (myfile.fail()) {
+			std::clog << "webserver/error: Error writing to file at iteration " << i << std::endl;
+			break;
+		}
 	}
+	myfile.close();
 
 	return jsonRoot;
 }
@@ -345,13 +386,14 @@ std::shared_ptr<Song> RequestHandler::GetSongFromJSON(web::json::value jsonDoc) 
 			m_songs[i]->language == utility::conversions::to_utf8string(jsonDoc[utility::conversions::to_string_t("Language")].as_string()) &&
 			m_songs[i]->creator == utility::conversions::to_utf8string(jsonDoc[utility::conversions::to_string_t("Creator")].as_string()) &&
 			m_songs[i]->providedBy == utility::conversions::to_utf8string(jsonDoc[utility::conversions::to_string_t("ProvidedBy")].as_string()) &&
+			m_songs[i]->tags == utility::conversions::to_utf8string(jsonDoc[utility::conversions::to_string_t("Tags")].as_string()) &&
+			std::to_string(m_songs[i]->year) == utility::conversions::to_utf8string(jsonDoc[utility::conversions::to_string_t("Year")].as_string()) &&
 			m_songs[i]->comment == utility::conversions::to_utf8string(jsonDoc[utility::conversions::to_string_t("Comment")].as_string())) {
-			std::clog << "webserver/info: Found requested song." << std::endl;
-			return m_songs[i];
+				SpdLogger::info(LogSystem::WEBSERVER, "Found requested song, {} - {}", m_songs[i]->artist, m_songs[i]->title);
+				return m_songs[i];
 		}
 	}
-
-	std::clog << "webserver/info: Couldn't find requested song." << std::endl;
+	SpdLogger::info(LogSystem::WEBSERVER, "Couldn't find requested song, {} - {}", utility::conversions::to_utf8string(jsonDoc[utility::conversions::to_string_t("Artist")].as_string()), utility::conversions::to_utf8string(jsonDoc[utility::conversions::to_string_t("Title")].as_string()));
 	return std::shared_ptr<Song>();
 }
 
@@ -406,7 +448,8 @@ std::vector<std::string> RequestHandler::GetTranslationKeys() {
 		translate_noop("Successfully added song to the playlist."),
 		translate_noop("Failed adding song to the playlist!"),
 		translate_noop("No songs found with current filter."),
-		translate_noop("Has error")
+		translate_noop("Has error"),
+		translate_noop("Tags")
 	};
 
 	return tranlationKeys;

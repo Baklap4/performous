@@ -85,9 +85,9 @@ set(SOURCES ${SOURCE_FILES} ${HEADER_FILES} ${RESOURCE_FILES})
 add_executable(performous ${SUBSYSTEM_WIN32} ${SOURCES})
 # Libraries
 
-find_package(Boost 1.55 REQUIRED COMPONENTS program_options iostreams system locale)
-target_include_directories(performous SYSTEM PRIVATE ${Boost_INCLUDE_DIRS})
-target_link_libraries(performous PRIVATE ${Boost_LIBRARIES})
+find_package(Boost 1.70 CONFIG REQUIRED COMPONENTS program_options iostreams locale)
+target_link_libraries(performous PRIVATE Boost::boost Boost::program_options Boost::iostreams Boost::locale)
+
 find_package(ICU 65 REQUIRED uc data i18n io)
 target_link_libraries(performous PRIVATE ICU::uc ICU::data ICU::i18n ICU::io)
 
@@ -105,6 +105,7 @@ set(SELF_BUILT_AUBIO "AUTO" CACHE STRING "rule to allow self build of Aubio depe
 set(SELF_BUILT_JSON "AUTO" CACHE STRING "rule to allow self build of Json dependency library [NEVER|AUTO*|ALWAYS]")
 # This is AUTO cause CED is not available on ubuntu
 set(SELF_BUILT_CED "AUTO" CACHE STRING "rule to allow self build of Ced dependency library [NEVER|AUTO*|ALWAYS]")
+set(SELF_BUILT_SPDLOG "AUTO" CACHE STRING "rule to allow self build of Spdlog dependency library [NEVER|AUTO*|ALWAYS]")
 
 set(Aubio_REQUIRED_VERSION "0.4.9")
 
@@ -113,8 +114,7 @@ set(Aubio_REQUIRED_VERSION "0.4.9")
 if (MINGW)
 	target_link_libraries(performous PRIVATE mingw32)
 endif()
-
-foreach(lib ${OUR_LIBS} SDL2 PangoCairo LibRSVG LibXML++ AVFormat SWResample SWScale ZLIB JPEG PNG PortAudio Fontconfig GLM Json Ced Aubio)
+foreach(lib SDL2 PangoCairo LibRSVG LibXML++ AVFormat SWResample SWScale ZLIB JPEG PNG WebP PortAudio Fontconfig GLM Json Ced Aubio)
 	find_package(${lib} ${${lib}_REQUIRED_VERSION} REQUIRED)
 	message(STATUS "${lib} includes: ${${lib}_INCLUDE_DIRS}")
 	target_include_directories(performous SYSTEM PRIVATE ${${lib}_INCLUDE_DIRS})
@@ -122,13 +122,16 @@ foreach(lib ${OUR_LIBS} SDL2 PangoCairo LibRSVG LibXML++ AVFormat SWResample SWS
 	add_definitions(${${lib}_DEFINITIONS})
 endforeach(lib)
 
-find_package(fmt REQUIRED CONFIG)
+find_package(fmt 8.1 REQUIRED CONFIG)
 # CppRESTSDK and their godforsaken U macro.
 if(fmt_VERSION VERSION_GREATER_EQUAL 9.0.0)
 	target_compile_definitions(performous PRIVATE -D_TURN_OFF_PLATFORM_STRING)
 endif()
 
-target_link_libraries(performous PRIVATE fmt::fmt)
+find_package(Spdlog REQUIRED MODULE)
+
+target_compile_definitions(performous PRIVATE $<IF:$<NOT:$<BOOL:${SPDLOG_FMT_EXTERNAL_HO}>>,SPDLOG_FMT_EXTERNAL,SPDLOG_FMT_EXTERNAL_HO> FMT_USE_CONSTEXPR)
+target_link_libraries(performous PRIVATE $<IF:$<NOT:$<BOOL:${SPDLOG_FMT_EXTERNAL_HO}>>,fmt::fmt,fmt::fmt-header-only> spdlog::spdlog_header_only)
 
 # Activating MIDI hardware (e-drums with USB/MIDI connection)
 set(ENABLE_MIDI AUTO CACHE STRING "Use midi hardware (e-drums with USB/MIDI connection)")
@@ -215,7 +218,7 @@ endif()
 if(cpprestsdk_FOUND OR CppRest_FOUND)
 	# add other required dependencies then
 	# FIXME: move this to the CppRest package includes if possible
-	find_package(Boost 1.55 REQUIRED COMPONENTS chrono thread)
+	find_package(Boost 1.70 CONFIG REQUIRED COMPONENTS chrono thread)
 	find_package(OpenSSL REQUIRED)
 	if(cpprestsdk_FOUND)
 		target_link_libraries(performous PRIVATE cpprestsdk::cpprest)

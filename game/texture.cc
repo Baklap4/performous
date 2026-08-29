@@ -1,11 +1,13 @@
 #include "texture.hh"
 
 #include "configuration.hh"
+#include "game.hh"
 #include "graphic/video_driver.hh"
+#include "log.hh"
 #include "screen.hh"
 #include "svg.hh"
-#include "game.hh"
 #include "util.hh"
+#include "graphic/color_trans.hh"
 
 #include <atomic>
 #include <cctype>
@@ -43,17 +45,26 @@ class TextureLoader::Impl {
 		try {
 			auto const ext = toLower(name.extension().string());
 			if (!fs::is_regular_file(name))
+			{
 				throw std::runtime_error("File not found: " + name.string());
-			else if (ext == ".svg")
-				loadSVG(bitmap, name);
-			else if (ext == ".jpg" || ext == ".jpeg")
-				loadJPEG(bitmap, name);
-			else if (ext == ".png")
-				loadPNG(bitmap, name);
+			}
 			else
-				throw std::runtime_error("Unknown image file format: " + name.string());
-		} catch (std::exception& e) {
-			std::clog << "image/error: " << e.what() << std::endl;
+			{
+				const ImageType image_type{getImageType(name.string())};
+				if (image_type == ImageType::SVG)
+					loadSVG(bitmap, name);
+				else if (image_type == ImageType::JPEG)
+					loadJPEG(bitmap, name);
+				else if (image_type == ImageType::PNG)
+					loadPNG(bitmap, name);
+				else if (image_type == ImageType::WEBP)
+					loadWEBP(bitmap, name);
+				else
+					throw std::runtime_error("Unknown image file format: " + name.string());
+			}
+		}
+		catch (std::exception& e) {
+			SpdLogger::error(LogSystem::IMAGE, "Error loading texture, exception={}", e.what());
 		}
 	}
 	std::atomic<bool> m_quit{ false };
@@ -206,11 +217,13 @@ void Texture::load(Bitmap const& bitmap, bool isText) {
 	if (!isText) glGenerateMipmap(type());
 }
 
-void Texture::draw(Window& window) const {
+void Texture::draw(Window& window, float opacity) const {
 	if (empty()) return;
 	// FIXME: This gets image alpha handling right but our ColorMatrix system always assumes premultiplied alpha
 	// (will produce incorrect results for fade effects)
 	glBlendFunc(m_premultiplied ? GL_ONE : GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	float alpha = static_cast<float>(clamp(opacity));
+	ColorTrans c(window, Color::alpha(alpha));
 	draw(window, dimensions, TexCoords(tex.x1, tex.y1, tex.x2, tex.y2));
 }
 

@@ -2,16 +2,18 @@
 
 #include "chrono.hh"
 #include "config.hh"
+#include "log.hh"
 #include "screen_songs.hh"
 #include "util.hh"
 
 #include "aubio/aubio.h"
+
 #include <iostream>
 #include <memory>
-#include <sstream>
 #include <stdexcept>
 #include <system_error>
 #include <thread>
+#include <cmath>
 
 #if defined(__GNUC__)
 #pragma GCC diagnostic push
@@ -27,24 +29,19 @@ extern "C" {
 #include <libavutil/opt.h>
 #include <libavutil/mathematics.h>
 #include <libavutil/error.h>
+#include <libavutil/replaygain.h>
+#include <libavutil/channel_layout.h>
+#include <libavutil/samplefmt.h>
 }
 
 #define AUDIO_CHANNELS 2
-
-#if !defined(__PRETTY_FUNCTION__) && defined(_MSC_VER)
-#define __PRETTY_FUNCTION__ __FUNCSIG__
-#endif
-
-#define FFMPEG_CHECKED(func, args, caller) FFmpeg::check(func args, caller)
 
 namespace {
 	std::string ffversion(unsigned ver) {
 		unsigned major = ver >> 16;
 		unsigned minor = (ver >> 8) & 0xFF;
 		unsigned micro = ver & 0xFF;
-		std::ostringstream oss;
-		oss << major << "." << minor << "." << micro << (micro >= 100 ? "(ff)" : "(lav)");
-		return oss.str();
+		return fmt::format("{}.{}.{}", major, minor, micro);
 	}
 }
 
@@ -71,7 +68,7 @@ bool AudioBuffer::condition() {
 
 void AudioBuffer::operator()(const std::int16_t *data, std::int64_t count, std::int64_t sample_position) {
 	if (sample_position < 0) {
-		std::clog << "ffmpeg/warning: Negative audio sample_position " << sample_position << " seconds, frame ignored." << std::endl;
+		SpdLogger::warn(LogSystem::FFMPEG, "Negative audio sample_position={} seconds, frame ignored.", sample_position);
 		return;
 	}
 
@@ -85,7 +82,7 @@ void AudioBuffer::operator()(const std::int16_t *data, std::int64_t count, std::
 	if (m_quit || m_seek_asked) return;
 
 	if (m_write_pos != sample_position) {
-		std::clog << "ffmpeg/debug: Gap in audio: expected=" << m_write_pos << " received=" << sample_position << '\n';
+		SpdLogger::debug(LogSystem::FFMPEG, "Audio gap: expected={}, received={}.", m_write_pos, sample_position);
 	}
 
 	m_write_pos = sample_position;
@@ -131,6 +128,13 @@ bool AudioBuffer::read(float* begin, std::int64_t samples, std::int64_t pos, flo
 	if (eof(pos + samples) || m_quit)
 		return false;
 
+
+	if ( m_replayGainDecibels != 0.0 )  // If Replay Gain is defined at all
+	{
+		// A replay gain was defined, apply the linear gain factor and the volume to the samples
+		volume *= static_cast<float>(m_replayGainFactor);
+	}
+
 	// one cannot read more data than the size of buffer
 	std::int64_t size = static_cast<std::int64_t>(m_data.size());
 	samples = std::min(samples, size);
@@ -160,7 +164,9 @@ double AudioBuffer::duration() { return m_duration; }
 AudioBuffer::AudioBuffer(fs::path const& file, unsigned rate, size_t size):
 	m_data(size), m_sps(rate * AUDIO_CHANNELS) {
 		auto ffmpeg = std::make_unique<AudioFFmpeg>(file, rate, std::ref(*this));
-		const_cast<double&>(m_duration) = ffmpeg->duration();
+		m_duration = ffmpeg->duration();
+		m_replayGainDecibels = ffmpeg->getReplayGainInDecibels();
+		m_replayGainFactor = ffmpeg->getReplayGainVolumeFactor();
 		reader_thread = std::async(std::launch::async, [this, ffmpeg = std::move(ffmpeg)] {
 			auto errors = 0u;
 			std::unique_lock<std::mutex> l(m_mutex);
@@ -188,8 +194,8 @@ AudioBuffer::AudioBuffer(fs::path const& file, unsigned rate, size_t size):
 					m_cond.wait(l, [this]{ return m_quit || m_seek_asked; });
 				} catch (const std::exception& e) {
 					UnlockGuard<decltype(l)> unlocked(l); // unlock while doing IOs
-					std::clog << "ffmpeg/error: " << e.what() << std::endl;
-					if (++errors > 2) std::clog << "ffmpeg/error: FFMPEG terminating due to multiple errors" << std::endl;
+					SpdLogger::error(LogSystem::FFMPEG, "Error={}.", e.what());
+					if (++errors > 2) SpdLogger::error(LogSystem::FFMPEG, "Terminating due to multiple errors.");
 				}
 			}
 		});
@@ -213,21 +219,34 @@ static void printFFmpegInfo() {
 		LIBAVFORMAT_VERSION_INT == avformat_version() &&
 		LIBSWSCALE_VERSION_INT == swscale_version();
 	if (matches) {
-		std::clog << "ffmpeg/info: "
-			" avutil:" + ffversion(LIBAVUTIL_VERSION_INT) +
-			" avcodec:" + ffversion(LIBAVCODEC_VERSION_INT) +
-			" avformat:" + ffversion(LIBAVFORMAT_VERSION_INT) +
-			" swresample:" + ffversion(LIBSWRESAMPLE_VERSION_INT) +
-			" swscale:" + ffversion(LIBSWSCALE_VERSION_INT)
-			<< std::endl;
-	} else {
-		std::clog << "ffmpeg/error: header/lib version mismatch:"
-			" avutil:" + ffversion(LIBAVUTIL_VERSION_INT) + "/" + ffversion(avutil_version()) +
-			" avcodec:" + ffversion(LIBAVCODEC_VERSION_INT) + "/" + ffversion(avcodec_version()) +
-			" avformat:" + ffversion(LIBAVFORMAT_VERSION_INT) + "/" + ffversion(avformat_version()) +
-			" swresample:" + ffversion(LIBSWRESAMPLE_VERSION_INT) + "/" + ffversion(swresample_version()) +
-			" swscale:" + ffversion(LIBSWSCALE_VERSION_INT) + "/" + ffversion(swscale_version())
-			<< std::endl;
+		SpdLogger::info(LogSystem::FFMPEG,
+			"\n{5}libavutil: {0}\n"
+			"{5}libavcodec: {1}\n"
+			"{5}libavformat: {2}\n"
+			"{5}libswresample: {3}\n"
+			"{5}libswscale: {4}",
+			ffversion(LIBAVUTIL_VERSION_INT),
+			ffversion(LIBAVCODEC_VERSION_INT),
+			ffversion(LIBAVFORMAT_VERSION_INT),
+			ffversion(LIBSWRESAMPLE_VERSION_INT),
+			ffversion(LIBSWSCALE_VERSION_INT),
+			SpdLogger::newLineDec
+		);
+	}
+	else {
+		SpdLogger::info(LogSystem::FFMPEG,
+			"\n{10}libavutil: {0}/{1}\n"
+			"{10}libavcodec: {2}/{3}\n"
+			"{10}libavformat: {4}/{5}\n"
+			"{10}libswresample: {6}/{7}\n"
+			"{10}libswscale: {8}/{9}",
+			ffversion(LIBAVUTIL_VERSION_INT), ffversion(avutil_version()),
+			ffversion(LIBAVCODEC_VERSION_INT), ffversion(avcodec_version()),
+			ffversion(LIBAVFORMAT_VERSION_INT), ffversion(avformat_version()),
+			ffversion(LIBSWRESAMPLE_VERSION_INT), ffversion(swresample_version()),
+			ffversion(LIBSWSCALE_VERSION_INT), ffversion(swscale_version()),
+			SpdLogger::newLineDec
+		);
 	}
 #if (LIBAVFORMAT_VERSION_INT) < (AV_VERSION_INT(58,0,0))
 	av_register_all();
@@ -237,9 +256,7 @@ static void printFFmpegInfo() {
 std::string FFmpeg::Error::msgFmt(const FFmpeg &self, int errorValue, const char *func) {
 		char message[AV_ERROR_MAX_STRING_SIZE];
 		av_strerror(errorValue, message, AV_ERROR_MAX_STRING_SIZE);
-		std::ostringstream oss;
-		oss << "FFmpeg Error: Processing file " << self.m_filename << " code=" << errorValue << ", error=" << message << ", in function=" << func;
-		return oss.str();
+		return fmt::format("Error processing file={}, error={}({}), in function={}.", self.m_filename, errorValue, message, func);
 }
 
 FFmpeg::FFmpeg(fs::path const& _filename, int mediaType) : m_filename(_filename) {
@@ -262,6 +279,12 @@ FFmpeg::FFmpeg(fs::path const& _filename, int mediaType) : m_filename(_filename)
 	m_streamId = av_find_best_stream(m_formatContext.get(), static_cast<AVMediaType>(mediaType), -1, -1, &codec, 0);
 	if (m_streamId < 0) throw Error(*this, m_streamId, __PRETTY_FUNCTION__);
 
+	// Possibly the stream defines an audio loudness normalisation factor; read it
+	if (!readR128Gain(m_formatContext->streams[m_streamId])) // Prefer EBU R 128 over REPLAYGAIN 
+	{
+		readReplayGain(m_formatContext->streams[m_streamId]); 
+	}
+
 	decltype(m_codecContext) pCodecCtx{avcodec_alloc_context3(codec), avcodec_free_context};
 	avcodec_parameters_to_context(pCodecCtx.get(), m_formatContext->streams[m_streamId]->codecpar);
 	{
@@ -272,6 +295,117 @@ FFmpeg::FFmpeg(fs::path const& _filename, int mediaType) : m_filename(_filename)
 	}
 	pCodecCtx->workaround_bugs = FF_BUG_AUTODETECT;
 	m_codecContext = std::move(pCodecCtx);
+}
+
+
+/**
+  * \brief    Fetch the Replay Gain "loudness" factor from the stream
+  *
+  * \details  Replay Gain is a decibels "loudness" factor that can be used to normalise
+  *           the human-perceived loudness of a given audio sample.  It is useful for
+  *           normalising the volume of recordings mastered at different volumes.
+  *           Libav reads this information in, storing it in the side channel blocks.
+  *           This function requests this value from the side channel.
+  *
+  *           Ref: https://en.wikipedia.org/wiki/ReplayGain
+  *                https://www.smithsonianmag.com/smart-news/music-does-get-louder-every-year-835681/
+  *
+  * \note     The libav function av_stream_get_side_data() has been deprecated
+  *           It will need to be updated along with all the others
+  *
+  * \return   True if any gain tag was read from the file
+  */
+bool FFmpeg::readReplayGain(const AVStream *stream)
+{
+	bool gainFound = false;
+	m_replayGainDecibels = 0.0;  // 0.0 indicates not defined
+	m_replayGainFactor   = 1.0;
+
+	// Only use Replay Gain if the option for normalisation is enabled
+	if (stream != nullptr && config["audio/normalize_songs"].b() == true) {
+#if (LIBAVFORMAT_VERSION_MAJOR) < 61 // arrived at experimentally with the pipeline
+#if (LIBAVFORMAT_VERSION_MAJOR) <= 58
+		int replay_gain_size;
+#else
+		size_t replay_gain_size;
+#endif // <=58
+		const AVReplayGain *replay_gain = (AVReplayGain *)av_stream_get_side_data(stream, AV_PKT_DATA_REPLAYGAIN, &replay_gain_size);
+#else
+        // av_packet_side_data_get() appears first in VERSION 58
+		size_t replay_gain_size = 0;
+        const AVReplayGain *replay_gain = nullptr;
+	    const AVCodecParameters *cp = stream->codecpar;
+	    const AVPacketSideData *psd = av_packet_side_data_get(cp->coded_side_data, cp->nb_coded_side_data, AV_PKT_DATA_REPLAYGAIN);
+        if (psd) {
+            replay_gain_size = psd->size;
+            replay_gain = static_cast<const AVReplayGain*>(static_cast<const void *>(psd->data)); // double-cast ... is there a better way?
+        }
+#endif // <60
+		if (replay_gain_size > 0 && replay_gain != nullptr) {
+			m_replayGainDecibels = static_cast<double>(replay_gain->track_gain);
+			m_replayGainDecibels /= 100000.0;   // convert from microbels to decibels
+			m_replayGainFactor = calculateLinearGain(m_replayGainDecibels);
+			SpdLogger::debug(LogSystem::FFMPEG, "REPLAY Audio Gain is [{0:.2f}] dB, Linear Gain is [{1:.2f}]", m_replayGainDecibels, m_replayGainFactor);
+			gainFound = true;
+		}
+		else {
+			SpdLogger::debug(LogSystem::FFMPEG, "No REPLAY Audio Gain in file");
+		}
+	}
+	return gainFound;
+}
+
+/**
+  * \brief    Fetch the R128 "loudness" factor from the stream
+  *
+  * \details  "EBU R128" was adopted as the loudness calculation standard for television & radio.
+  *           The recommended LUFS setting for EBU R128 is -23, wheres REPLAYGAIN is -18.
+  *           There are arguments about how this is too low, and not everyone uses -23.  
+  *           But it is the standard so we will. Ref: https://en.wikipedia.org/wiki/EBU_R_128
+  *           This function reads any "r128_track_gain" tag in the file (not album gain)
+  *
+  * \return   True if any gain tag was read from the file
+  */
+bool FFmpeg::readR128Gain(const AVStream *stream)
+{
+	const char *R128_GAIN_TAG = "R128_TRACK_GAIN";
+	bool gainFound = false;
+	m_replayGainDecibels = 0.0;  // 0.0 indicates not defined
+	m_replayGainFactor   = 1.0;
+
+	// Only use Replay Gain if the option for normalisation is enabled
+	if (stream != nullptr && config["audio/normalize_songs"].b() == true) {
+		const AVDictionaryEntry *r128Tag = av_dict_get(stream->metadata, R128_GAIN_TAG, nullptr, 0);
+		if (r128Tag != nullptr) {
+			double r128Gain = strtod(r128Tag->value, nullptr);
+			if (std::fpclassify(r128Gain) == FP_NORMAL) { // not zero, nan, etc.
+				// ref: https://github.com/performous/performous/issues/1078#issuecomment-3206359884  Kudos to @complexlogic
+				m_replayGainDecibels = (r128Gain / 256.0) + 5.0;  // +5 to match REPLAYGAIN at -18 LUFS
+				m_replayGainFactor = calculateLinearGain(m_replayGainDecibels);
+				SpdLogger::debug(LogSystem::FFMPEG, "R128 Audio Gain is [{0:.2f}] dB, Linear Gain is [{1:.2f}]", m_replayGainDecibels, m_replayGainFactor);
+				gainFound = true;
+			}
+		}
+		if (!gainFound) {
+			SpdLogger::debug(LogSystem::FFMPEG, "No R128 Audio Gain in file");
+		}
+	}
+	return gainFound;
+}
+
+
+/**
+  * \brief    Calculate the linear gain, given a decibels factor
+  *
+  * \note     This function will return a gain of 1 for zero decibels, but
+  *           in this case, it's better to not apply the gain at all
+  */
+double FFmpeg::calculateLinearGain(double gainInDB) const {
+	// Ref: https://stackoverflow.com/a/1149105/1730895
+	if (gainInDB == 0.0)
+		return 1.0;
+	else
+		return pow(10.0, gainInDB / 20.0);
 }
 
 VideoFFmpeg::VideoFFmpeg(fs::path const& filename, VideoCb videoCb) : FFmpeg(filename, AVMEDIA_TYPE_VIDEO), handleVideoData(videoCb) {
@@ -314,12 +448,14 @@ AudioFFmpeg::AudioFFmpeg(fs::path const& filename, int rate, AudioCb audioCb) :
 
 double FFmpeg::duration() const { return double(m_formatContext->duration) / double(AV_TIME_BASE); }
 
+double FFmpeg::getReplayGainInDecibels() const { return m_replayGainDecibels; }
+double FFmpeg::getReplayGainVolumeFactor() const { return m_replayGainFactor; }
+
 void FFmpeg::avformat_close_input(AVFormatContext *fctx) {
 	if (fctx) ::avformat_close_input(&fctx);
 }
 void FFmpeg::avcodec_free_context(AVCodecContext *avctx) {
 	if (avctx == nullptr) return;
-	avcodec_close(avctx);
 	::avcodec_free_context(&avctx);
 }
 

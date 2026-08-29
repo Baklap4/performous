@@ -49,6 +49,12 @@ struct TextStyle {
 	std::string fontalign; ///< alignment
 	std::string	stroke_linejoin; ///< stroke line-join type
 	std::string	stroke_linecap; ///< stroke line-join type
+
+	// New attributes for shadow effect
+	Color shadow_col = Color(0.f, 0.f, 0.f, 0.f); ///< shadow color (default transparent)
+	float shadow_offset_x = 10.f; ///< horizontal offset of shadow
+	float shadow_offset_y = 10.f; ///< vertical offset of shadow
+	float shadow_blur = 3.f; ///< blur radius for shadow (optional)
 };
 
 /// this class will enable to create a texture from a themed text structure
@@ -160,7 +166,9 @@ public:
 	void setAlign(Align align) { m_align = align; }
 
 private:
-	std::vector<std::unique_ptr<OpenGLText>> m_opengl_text;
+	std::vector<OpenGLText*> m_opengl_text;
+	std::unordered_map<std::string, std::unique_ptr<OpenGLText>> m_text_cache;
+
 	Align m_align;
 	float m_x;
 	float m_y;
@@ -169,7 +177,6 @@ private:
 	float m_factor;
 	float m_texture_width;
 	float m_texture_height;
-	std::string m_cache_text;
 	TextStyle m_textstyle;
 	TextStyle m_textstyle_highlight;
 };

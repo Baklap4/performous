@@ -1,26 +1,29 @@
 #include "opengl_text.hh"
 
-#include "libxml++-impl.hh"
 
-#include <cstdint>
-#include <cmath>
-#include <iostream>
-#include <sstream>
 #include "fs.hh"
 #include "graphic/text_renderer.hh"
 #include "graphic/lyrics_color_trans.hh"
 #include "graphic/video_driver.hh"
 #include "fontconfig/fontconfig.h"
+#include "libxml++.hh"
+#include "log.hh"
+
 #include <pango/pangocairo.h>
+
+#include <cstdint>
+#include <cmath>
+#include <iostream>
+#include <sstream>
 
 void loadFonts() {
 	auto config = std::unique_ptr<FcConfig, decltype(&FcConfigDestroy)>(FcInitLoadConfig(), &FcConfigDestroy);
 	for (fs::path const& font: listFiles("fonts")) {
 		FcBool err = FcConfigAppFontAddFile(config.get(), reinterpret_cast<const FcChar8*>(font.string().c_str()));
-		std::clog << "font/info: Loading font " << font << ": " << ((err == FcTrue)?"ok":"error") << std::endl;
+		SpdLogger::info(LogSystem::TEXT, fmt::runtime("Loading font={} : {})"), font, err == FcTrue ? "OK" : "Error");
 	}
 	if (!FcConfigBuildFonts(config.get()))
-		throw std::logic_error("Could not build font database.");
+		throw std::runtime_error("Could not build font database.");
 
 		// FcConfigSetCurrent increments the refcount of config, thus the local handle on config can be deleted safely.
 	FcConfigSetCurrent(config.get());
@@ -28,14 +31,16 @@ void loadFonts() {
 	// This would all be very useless if pango+cairo didn't use the fontconfig+freetype backend:
 
 	PangoCairoFontMap *map = PANGO_CAIRO_FONT_MAP(pango_cairo_font_map_get_default());
-	std::clog << "font/info: PangoCairo is using font map " << G_OBJECT_TYPE_NAME(map) << std::endl;
+	SpdLogger::info(LogSystem::TEXT, "PangoCairo using font map={}.", G_OBJECT_TYPE_NAME(map));
 	if (pango_cairo_font_map_get_font_type(map) != CAIRO_FONT_TYPE_FT) {
 		PangoCairoFontMap *ftMap = PANGO_CAIRO_FONT_MAP(pango_cairo_font_map_new_for_font_type(CAIRO_FONT_TYPE_FT));
 		if (ftMap) {
-			std::clog << "font/info: Switching to font map " << G_OBJECT_TYPE_NAME(ftMap) << std::endl;
+			SpdLogger::info(LogSystem::TEXT, "Switching to font map={}.", G_OBJECT_TYPE_NAME(ftMap));
 			pango_cairo_font_map_set_default(ftMap);
-		} else
-			std::clog << "font/error: Can't switch to FreeType, fonts will be unavailable!" << std::endl;
+		}
+		else {
+			SpdLogger::error(LogSystem::TEXT, "Can't switch to FreeType; fonts will be unavailable!");
+		}
 	}
 }
 
@@ -70,23 +75,26 @@ void OpenGLText::draw(Window& window, Dimensions &_dim, TexCoords &_tex) {
 }
 
 namespace {
-	void parseTheme(fs::path const& themeFile, TextStyle &_theme, float &_width, float &_height, float &_x, float &_y, SvgTxtTheme::Align& _align) {
+	void parseTheme(fs::path const& themeFile, TextStyle& _theme, float& _width, float& _height, float& _x, float& _y, SvgTxtTheme::Align& _align) {
 		xmlpp::Node::PrefixNsMap nsmap;
 		nsmap["svg"] = "http://www.w3.org/2000/svg";
 		xmlpp::DomParser dom(themeFile.string());
+
 		// Parse width attribute
-		auto n = dom.get_document()->get_root_node()->find("/svg:svg/@width",nsmap);
-		if (n.empty()) throw std::runtime_error("Unable to find text theme info width in "+themeFile.string());
+		auto n = dom.get_document()->get_root_node()->find("/svg:svg/@width", nsmap);
+		if (n.empty()) throw std::runtime_error("Unable to find text theme info width in " + themeFile.string());
 		xmlpp::Attribute& width = dynamic_cast<xmlpp::Attribute&>(*n[0]);
 		_width = std::stof(width.get_value());
+
 		// Parse height attribute
-		n = dom.get_document()->get_root_node()->find("/svg:svg/@height",nsmap);
-		if (n.empty()) throw std::runtime_error("Unable to find text theme info height in "+themeFile.string());
+		n = dom.get_document()->get_root_node()->find("/svg:svg/@height", nsmap);
+		if (n.empty()) throw std::runtime_error("Unable to find text theme info height in " + themeFile.string());
 		xmlpp::Attribute& height = dynamic_cast<xmlpp::Attribute&>(*n[0]);
 		_height = std::stof(height.get_value());
+
 		// Parse text style attribute (CSS rules)
-		n = dom.get_document()->get_root_node()->find("/svg:svg//svg:text/@style",nsmap);
-		if (n.empty()) throw std::runtime_error("Unable to find text theme info style in "+themeFile.string());
+		n = dom.get_document()->get_root_node()->find("/svg:svg//svg:text/@style", nsmap);
+		if (n.empty()) throw std::runtime_error("Unable to find text theme info style in " + themeFile.string());
 		xmlpp::Attribute& style = dynamic_cast<xmlpp::Attribute&>(*n[0]);
 		std::istringstream iss(style.get_value());
 		std::string token;
@@ -119,13 +127,41 @@ namespace {
 				else if (value == "end") _align = SvgTxtTheme::Align::RIGHT;
 			}
 		}
-		// Parse x and y attributes
-		n = dom.get_document()->get_root_node()->find("/svg:svg//svg:text/@x",nsmap);
-		if (n.empty()) throw std::runtime_error("Unable to find text theme info x in "+themeFile.string());
+
+		// Check for custom shadow color (data-drop-shadow or filter="url(#drop-shadow)")
+		n = dom.get_document()->get_root_node()->find("/svg:svg//svg:text/@filter", nsmap);
+		if (!n.empty()) {
+			xmlpp::Attribute& filter = dynamic_cast<xmlpp::Attribute&>(*n[0]);
+			if (filter.get_value() == "url(#drop-shadow)") {
+				// Find <feFlood> element to extract shadow color and opacity
+				auto filter_node = dom.get_document()->get_root_node()->find("/svg:svg//svg:defs/svg:filter[@id='drop-shadow']/svg:feFlood", nsmap);
+				if (!filter_node.empty()) {
+					xmlpp::Element& feFlood = dynamic_cast<xmlpp::Element&>(*filter_node[0]);
+					// Extract the flood color and opacity
+					std::string color_value = feFlood.get_attribute_value("flood-color");
+					float opacity = std::stof(feFlood.get_attribute_value("flood-opacity"));
+					// Assuming the color is in RGB format like "rgb(0,0,255)"
+					std::sscanf(color_value.c_str(), "rgb(%f,%f,%f)", &_theme.shadow_col.r, &_theme.shadow_col.g, &_theme.shadow_col.b);
+					_theme.shadow_col.a = opacity;  // Set the opacity
+				}
+			}
+		}
+
+		// Alternatively, check for a custom data attribute like `data-drop-shadow`
+		n = dom.get_document()->get_root_node()->find("/svg:svg//svg:text/@data-drop-shadow", nsmap);
+		if (!n.empty()) {
+			// If data-drop-shadow is present, set shadow color
+			_theme.shadow_col = Color(0.f, 0.f, 0.f, 0.5f); // Custom shadow color (adjustable)
+		}
+
+		// Parse x and y attributes for position
+		n = dom.get_document()->get_root_node()->find("/svg:svg//svg:text/@x", nsmap);
+		if (n.empty()) throw std::runtime_error("Unable to find text theme info x in " + themeFile.string());
 		xmlpp::Attribute& x = dynamic_cast<xmlpp::Attribute&>(*n[0]);
 		_x = std::stof(x.get_value());
-		n = dom.get_document()->get_root_node()->find("/svg:svg//svg:text/@y",nsmap);
-		if (n.empty()) throw std::runtime_error("Unable to find text theme info y in "+themeFile.string());
+
+		n = dom.get_document()->get_root_node()->find("/svg:svg//svg:text/@y", nsmap);
+		if (n.empty()) throw std::runtime_error("Unable to find text theme info y in " + themeFile.string());
 		xmlpp::Attribute& y = dynamic_cast<xmlpp::Attribute&>(*n[0]);
 		_y = std::stof(y.get_value());
 	}
@@ -177,14 +213,20 @@ void SvgTxtTheme::draw(Window& window, std::vector<TZoomText>& _text, bool lyric
 	for (auto& zt: _text) {
 		tmp += zt.string;
 	}
+	m_opengl_text.clear();
 
-	if (m_opengl_text.size() != _text.size() || m_cache_text != tmp) {
-		m_cache_text = tmp;
-		m_opengl_text.clear();
-		auto renderer = TextRenderer();
-		for (const auto& zt: _text) {
-			m_opengl_text.emplace_back(std::make_unique<OpenGLText>(renderer.render(zt.string, m_textstyle, m_factor)));
+	static TextRenderer renderer;
+
+	for (const auto& zt : _text) {
+		auto it = m_text_cache.find(zt.string);
+
+		if (it == m_text_cache.end()) {
+			auto text = std::make_unique<OpenGLText>(renderer.render(zt.string, m_textstyle, m_factor));
+
+			it = m_text_cache.emplace(zt.string, std::move(text)).first;
 		}
+
+		m_opengl_text.push_back(it->second.get());
 	}
 	float text_x = 0.0f;
 	float text_y = 0.0f;
@@ -232,9 +274,6 @@ Size SvgTxtTheme::measure(std::string const& text) {
 
 	for (auto&& t : m_opengl_text)
 		width += t->getWidth();
-
-	//std::cout << "svg width: " << width << std::endl;
-
 	return TextRenderer().measure(text, m_textstyle, m_factor) / width;
 }
 

@@ -21,7 +21,8 @@ sudo apt-get install git-core cmake build-essential gettext help2man \
    libepoxy-dev libsdl2-dev libcairo2-dev libpango1.0-dev librsvg2-dev \
    libboost-all-dev libavcodec-dev libavformat-dev libswscale-dev libswresample-dev \
    libpng-dev libjpeg-dev libxml++2.6-dev portaudio19-dev \
-   libopencv-dev libportmidi-dev libcpprest-dev nlohmann-json3-dev libfmt-dev
+   libopencv-dev libportmidi-dev libcpprest-dev nlohmann-json3-dev libfmt-dev \
+   libwebp-dev
 ```
 
 Notice: Dependency problems may prevent installation of portaudio19-dev. At least with Ubuntu 13.04 this can be solved by first installing libjack-jackd2-dev, even though that package is not actually needed for Performous.
@@ -46,13 +47,36 @@ sudo emerge boost git cmake help2man glew libsdl2 ffmpeg portaudio libxmlpp \
 
 ### Fedora
 
-(You need [http://rpmfusion.org/Configuration RPM Fusion Free] repository for ffmpeg):
-
+You need [http://rpmfusion.org/Configuration RPM Fusion Free] repository for ffmpeg.
+It's best to fetch and install this first, as the package-install below depends on it.
 ```bash
-yum install git cmake gcc-c++ gettext cairo-devel librsvg2-devel libsigc++20-devel \
+sudo dnf install https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm
+sudo dnf install https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm
+```
+
+#### Fedora 42 and earlier
+```bash
+sudo dnf install git cmake gcc-c++ gettext cairo-devel librsvg2-devel libsigc++20-devel \
    glibmm24-devel libxml++-devel boost-devel SDL2-devel libepoxy-devel ffmpeg-devel \
    portaudio-devel help2man redhat-lsb opencv-devel portmidi-devel libjpeg-turbo-devel \
-   pango-devel jsoncpp-devel 
+   pango-devel jsoncpp-devel fmt-devel libwebp-devel
+```
+
+#### Fedora 43 and later
+```bash
+sudo dnf install git cmake gcc-c++ gettext cairo-devel librsvg2-devel libsigc++20-devel \
+glibmm24-devel libxml++-devel boost-devel SDL2-devel libepoxy-devel ffmpeg-devel \
+portaudio-devel help2man lsb-release opencv-devel portmidi-devel libjpeg-turbo-devel \
+pango-devel jsoncpp-devel glm-devel openblas-devel fftw-devel cpprest-devel \
+libwebp-devel fmt-devel
+```
+(You may need to include `--allowerasing` for this to complete successfully)
+
+#### Unit Tests
+If you also plan to run unit tests, further packages are required.  
+(This is **not** needed just to play Performous)
+```bash
+sudo dnf install gtest-devel gmock-devel
 ```
 
 ### MacOS
